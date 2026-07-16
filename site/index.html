@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>c2pa inspector — verify Content Credentials in your browser</title>
+<meta name="description" content="Drop a JPEG or PNG and validate its C2PA / Content Credentials manifest — COSE signature, certificate chain, hash bindings, RFC 3161 timestamp — entirely in your browser. Nothing is uploaded.">
+<script>try{var t=localStorage.getItem("gl-theme");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="stylesheet" href="gloam.css">
+<style>
+  :root { --fail: #f85149; }
+  @media (prefers-color-scheme: light) { :root { --fail: #cf222e; } }
+  :root[data-theme="dark"]  { --fail: #f85149; }
+  :root[data-theme="light"] { --fail: #cf222e; }
+
+  .dropzone { cursor: pointer; transition: border-color .15s ease, box-shadow .15s ease; }
+  .dropzone:hover, .dropzone:focus-visible,
+  .dropzone.dragover { border-color: var(--gl-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--gl-accent) 25%, transparent); }
+  .dropzone pre { min-height: 200px; }
+
+  .gl-term pre .fail { color: var(--fail); }
+  .gl-term pre .info { color: var(--gl-faint); }
+
+  .verdict { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .verdict .mark { font-family: var(--gl-mono); font-size: 1.9rem; line-height: 1;
+    width: 54px; height: 54px; flex: none; display: grid; place-items: center;
+    border-radius: 12px; }
+  .verdict.ok .mark   { color: var(--gl-green); background: color-mix(in srgb, var(--gl-green) 14%, transparent); }
+  .verdict.bad .mark  { color: var(--fail);     background: color-mix(in srgb, var(--fail) 14%, transparent); }
+  .verdict.none .mark { color: var(--gl-muted); background: color-mix(in srgb, var(--gl-muted) 14%, transparent); }
+  .verdict h3 { margin: 0 0 4px; font-size: 1.15rem; }
+  .verdict p { margin: 0; color: var(--gl-muted); }
+  .verdict img { max-height: 76px; max-width: 120px; border-radius: 8px;
+    border: 1px solid var(--gl-border); margin-left: auto; }
+
+  dl.claims { display: grid; grid-template-columns: max-content 1fr; gap: 8px 18px; margin: 0; }
+  dl.claims dt { color: var(--gl-muted); font-family: var(--gl-mono); font-size: .82rem; padding-top: 2px; }
+  dl.claims dd { margin: 0; overflow-wrap: anywhere; }
+  dl.claims dd .gl-lang { margin-left: 6px; }
+
+  ol.chain { list-style: none; margin: 0; padding: 0; }
+  ol.chain li { padding: 10px 0; border-top: 1px solid var(--gl-border); font-size: .92rem; }
+  ol.chain li:first-child { border-top: 0; padding-top: 0; }
+  ol.chain .cn { font-family: var(--gl-mono); }
+  ol.chain .meta { color: var(--gl-faint); font-size: .82rem; margin-top: 2px; }
+
+  #results[hidden] { display: none; }
+  .busy { opacity: .6; pointer-events: none; }
+</style>
+</head>
+<body class="gl">
+<a class="gl-skip" href="#main">Skip to content</a>
+
+<header class="gl-nav">
+  <div class="gl-wrap">
+    <span class="gl-brand">
+      <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true">
+        <rect width="24" height="24" rx="6" fill="var(--gl-panel-2)"/>
+        <rect x="5" y="12" width="3.5" height="7" rx="1" fill="var(--gl-accent)"/>
+        <rect x="10.25" y="8" width="3.5" height="11" rx="1" fill="var(--gl-accent-2)"/>
+        <rect x="15.5" y="4" width="3.5" height="15" rx="1" fill="#d2b3ff"/>
+      </svg>
+      c2pa-inspector
+    </span>
+    <button class="gl-nav-toggle" aria-label="Toggle navigation" data-gl-nav-toggle="nav" aria-expanded="false">☰</button>
+    <nav id="nav">
+      <a href="#checks">What it checks</a>
+      <a href="#library">The library</a>
+      <button class="gl-theme-toggle" data-gl-theme-toggle aria-label="Toggle color theme" aria-pressed="true">
+        <svg class="gl-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+        <svg class="gl-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"/></svg>
+      </button>
+      <a class="gl-btn ghost" href="https://github.com/richardwooding/c2pa-inspector">GitHub ★</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <section class="gl-hero">
+    <div class="gl-wrap gl-hero-grid">
+      <div>
+        <p class="gl-eyebrow">c2pa · content credentials · pure go · webassembly</p>
+        <h1>Verify Content Credentials, <span class="gl-grad">without uploading anything.</span></h1>
+        <p class="sub">Full cryptographic C2PA validation — COSE signature, certificate chain,
+          hash bindings, RFC 3161 timestamp — compiled from pure Go to WebAssembly and running
+          entirely in this page. Your image never leaves the browser.</p>
+        <div class="gl-cta">
+          <button class="gl-btn primary" id="pick" disabled>Loading validator…</button>
+          <button class="gl-btn ghost" id="try-sample" disabled>Try a sample</button>
+        </div>
+        <p class="gl-hint" style="margin-top:14px">The sample is c2pa-rs's test image — signed with a
+          <em>test</em> certificate, so you can watch the trust check fail honestly while the
+          signature and hashes pass.</p>
+        <input type="file" id="file" accept="image/jpeg,image/png" hidden>
+      </div>
+      <div class="gl-term dropzone" id="dropzone" role="button" tabindex="0"
+           aria-label="Drop a JPEG or PNG here, or press Enter to choose a file">
+        <div class="bar">
+          <span class="dot" style="background:#ff5f56"></span>
+          <span class="dot" style="background:#ffbd2e"></span>
+          <span class="dot" style="background:#27c93f"></span>
+          <span class="t">c2pa validate</span>
+        </div>
+<pre id="term"><span class="pr">$</span> c2pa validate <span class="s">&lt;drop a JPEG or PNG here&gt;</span>
+<span class="c"># or click to choose a file</span>
+<span class="c"># nothing is uploaded — validation runs in-page</span></pre>
+      </div>
+    </div>
+  </section>
+
+  <section id="results" class="gl-section" hidden>
+    <div class="gl-wrap">
+      <p class="gl-eyebrow">result</p>
+      <h2 id="results-h">Inspection result.</h2>
+      <div class="gl-card" style="margin-top:28px">
+        <div class="verdict none" id="verdict">
+          <span class="mark" aria-hidden="true">·</span>
+          <div>
+            <h3 id="verdict-title"></h3>
+            <p id="verdict-sub"></p>
+          </div>
+          <img id="preview" alt="" hidden>
+        </div>
+      </div>
+      <div class="gl-grid two" style="margin-top:20px">
+        <div class="gl-card">
+          <h3>Claims <span class="gl-hint">(as recorded — unverified)</span></h3>
+          <dl class="claims" id="claims"></dl>
+        </div>
+        <div class="gl-card">
+          <h3>Signer chain <span class="gl-hint">(as presented in the manifest)</span></h3>
+          <ol class="chain" id="chain"></ol>
+        </div>
+      </div>
+      <div class="gl-card" style="margin-top:20px">
+        <h3>Validation log</h3>
+        <p class="gl-hint" style="margin:4px 0 12px">Every C2PA §15 status the validator recorded, in order.</p>
+        <div class="gl-term"><div class="bar">
+          <span class="dot" style="background:#ff5f56"></span>
+          <span class="dot" style="background:#ffbd2e"></span>
+          <span class="dot" style="background:#27c93f"></span>
+          <span class="t">statuses</span>
+        </div><pre id="statuses"></pre></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="checks" class="gl-section">
+    <div class="gl-wrap">
+      <p class="gl-eyebrow">what it checks</p>
+      <h2>The whole C2PA validation algorithm, client-side.</h2>
+      <div class="gl-grid feat" style="margin-top:28px">
+        <div class="gl-card">
+          <h3><span class="gl-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L20 7"/></svg></span>COSE signature</h3>
+          <p>Verifies the <code>COSE_Sign1</code> over the claim — ES256/384/512, PS256/384/512, and EdDSA.</p>
+        </div>
+        <div class="gl-card">
+          <h3><span class="gl-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z"/></svg></span>Certificate chain</h3>
+          <p>Chains the signer to the official C2PA trust list and enforces the certificate profile — EKU, key usage, no weak algorithms.</p>
+        </div>
+        <div class="gl-card">
+          <h3><span class="gl-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h10"/></svg></span>Hash bindings</h3>
+          <p>Recomputes the hard-binding content hash and every assertion's <code>hashed_uri</code>, so edits after signing show up.</p>
+        </div>
+        <div class="gl-card">
+          <h3><span class="gl-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></span>RFC 3161 timestamp</h3>
+          <p>Full CMS verification of the timestamp token, the TSA chain, and that it covers <em>this</em> signature.</p>
+        </div>
+        <div class="gl-card">
+          <h3><span class="gl-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/><path d="M11 7h4a2 2 0 0 1 2 2v4"/></svg></span>Ingredients</h3>
+          <p>Recursively validates nested manifests from earlier edits, with cycle detection.</p>
+        </div>
+        <div class="gl-card">
+          <h3><span class="gl-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span>Private by construction</h3>
+          <p>The validator is WebAssembly running in your tab. No upload, no server, no analytics on your images.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="library" class="gl-section">
+    <div class="gl-wrap">
+      <p class="gl-eyebrow">the library</p>
+      <h2>Powered by a pure-Go C2PA implementation.</h2>
+      <p class="gl-lede">This page is a thin WASM wrapper around
+        <a href="https://github.com/richardwooding/c2pa">richardwooding/c2pa</a> — a small,
+        no-cgo Go library with a fast unverified reader and a full validator. The same code that
+        runs here runs server-side in <a href="https://github.com/richardwooding/file-search-on">file-search-on</a>
+        and the <a href="https://github.com/richardwooding/c2pa-mcp">c2pa-mcp</a> MCP server.</p>
+      <div class="gl-install" style="margin-top:20px">
+        <div class="gl-snip">
+          <span class="lbl">go</span>
+          <code id="i1">go get github.com/richardwooding/c2pa</code>
+          <button class="gl-copy" data-gl-copy="i1">Copy</button>
+        </div>
+      </div>
+      <pre class="gl-code" style="margin-top:16px"><span class="c">// the entire integration</span>
+r := c2pa.<span class="k">Validate</span>(ctx, c2pa.JPEG, file)
+<span class="k">if</span> r.Valid {
+    fmt.Println(<span class="s">"verified, signed at"</span>, r.SignedAt)
+}</pre>
+    </div>
+  </section>
+</main>
+
+<footer class="gl-footer">
+  <div class="gl-wrap">
+    <span class="gl-brand" style="font-size:.98rem">c2pa-inspector · MIT · <span data-gl-year></span></span>
+    <nav class="gl-fnav">
+      <a href="https://github.com/richardwooding/c2pa-inspector">GitHub</a>
+      <a href="https://github.com/richardwooding/c2pa">c2pa library</a>
+      <a href="https://c2pa.org">c2pa.org</a>
+      <a href="https://richardwooding.github.io/">richardwooding.github.io</a>
+    </nav>
+  </div>
+</footer>
+
+<script src="wasm_exec.js"></script>
+<script src="app.js"></script>
+<script src="gloam.js" defer></script>
+</body>
+</html>
