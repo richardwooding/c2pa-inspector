@@ -16,6 +16,7 @@ import (
 	"context"
 	"crypto/x509"
 	"encoding/json"
+	"strings"
 	"syscall/js"
 	"time"
 
@@ -72,8 +73,28 @@ func sniffContainer(data []byte) (c2pa.Container, string, bool) {
 		return c2pa.JPEG, "JPEG", true
 	case len(data) >= 8 && bytes.Equal(data[:8], []byte{0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A}):
 		return c2pa.PNG, "PNG", true
+	case len(data) >= 12 && string(data[4:8]) == "ftyp":
+		return c2pa.BMFF, bmffLabel(string(data[8:12])), true
 	default:
 		return "", "", false
+	}
+}
+
+// bmffLabel maps an ftyp major brand to a human-readable container name.
+func bmffLabel(brand string) string {
+	switch brand {
+	case "heic", "heix", "hevc", "hevx", "mif1", "msf1":
+		return "HEIC"
+	case "avif", "avis":
+		return "AVIF"
+	case "qt  ":
+		return "QuickTime MOV"
+	case "M4A ":
+		return "M4A"
+	case "isom", "iso2", "iso3", "iso4", "iso5", "iso6", "mp41", "mp42", "M4V ", "dash":
+		return "MP4"
+	default:
+		return "BMFF (" + strings.TrimSpace(brand) + ")"
 	}
 }
 
@@ -94,7 +115,7 @@ func summarizeChain(chain []*x509.Certificate) []certSummary {
 func inspect(data []byte) resultJSON {
 	container, name, ok := sniffContainer(data)
 	if !ok {
-		return resultJSON{Error: "unsupported file type — drop a JPEG or PNG"}
+		return resultJSON{Error: "unsupported file type — drop a JPEG, PNG, HEIC, AVIF, MP4, or MOV"}
 	}
 
 	r := c2pa.Validate(context.Background(), container, bytes.NewReader(data))

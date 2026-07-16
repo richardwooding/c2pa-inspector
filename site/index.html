@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>c2pa inspector — verify Content Credentials in your browser</title>
-<meta name="description" content="Drop a JPEG or PNG and validate its C2PA / Content Credentials manifest — COSE signature, certificate chain, hash bindings, RFC 3161 timestamp — entirely in your browser. Nothing is uploaded.">
+<meta name="description" content="Drop a JPEG, PNG, HEIC, AVIF, MP4, or MOV and validate its C2PA / Content Credentials manifest — COSE signature, certificate chain, hash bindings, RFC 3161 timestamp — entirely in your browser. Nothing is uploaded.">
 <script>try{var t=localStorage.getItem("gl-theme");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
 <link rel="stylesheet" href="gloam.css">
 <style>
@@ -82,27 +82,28 @@
         <p class="gl-eyebrow">c2pa · content credentials · pure go · webassembly</p>
         <h1>Verify Content Credentials, <span class="gl-grad">without uploading anything.</span></h1>
         <p class="sub">Full cryptographic C2PA validation — COSE signature, certificate chain,
-          hash bindings, RFC 3161 timestamp — compiled from pure Go to WebAssembly and running
-          entirely in this page. Your image never leaves the browser.</p>
+          hash bindings (including BMFF for HEIC and MP4), RFC 3161 timestamp — compiled from pure
+          Go to WebAssembly and running entirely in this page. Your file never leaves the browser.</p>
         <div class="gl-cta">
           <button class="gl-btn primary" id="pick" disabled>Loading validator…</button>
-          <button class="gl-btn ghost" id="try-sample" disabled>Try a sample</button>
+          <button class="gl-btn ghost" id="try-sample" disabled>Sample image</button>
+          <button class="gl-btn ghost" id="try-sample-video" disabled>Sample video</button>
         </div>
-        <p class="gl-hint" style="margin-top:14px">The sample is c2pa-rs's test image — signed with a
-          <em>test</em> certificate, so you can watch the trust check fail honestly while the
-          signature and hashes pass.</p>
-        <input type="file" id="file" accept="image/jpeg,image/png" hidden>
+        <p class="gl-hint" style="margin-top:14px">Both samples are c2pa-rs test fixtures — signed
+          with <em>test</em> certificates, so you can watch the trust check fail honestly while the
+          signatures and hashes pass.</p>
+        <input type="file" id="file" accept="image/jpeg,image/png,image/heic,image/heif,image/avif,video/mp4,video/quicktime,.jpg,.jpeg,.png,.heic,.heif,.avif,.mp4,.mov,.m4a" hidden>
       </div>
       <div class="gl-term dropzone" id="dropzone" role="button" tabindex="0"
-           aria-label="Drop a JPEG or PNG here, or press Enter to choose a file">
+           aria-label="Drop a JPEG, PNG, HEIC, AVIF, MP4, or MOV here, or press Enter to choose a file">
         <div class="bar">
           <span class="dot" style="background:#ff5f56"></span>
           <span class="dot" style="background:#ffbd2e"></span>
           <span class="dot" style="background:#27c93f"></span>
           <span class="t">c2pa validate</span>
         </div>
-<pre id="term"><span class="pr">$</span> c2pa validate <span class="s">&lt;drop a JPEG or PNG here&gt;</span>
-<span class="c"># or click to choose a file</span>
+<pre id="term"><span class="pr">$</span> c2pa validate <span class="s">&lt;drop an image or video here&gt;</span>
+<span class="c"># JPEG · PNG · HEIC · AVIF · MP4 · MOV</span>
 <span class="c"># nothing is uploaded — validation runs in-page</span></pre>
       </div>
     </div>
@@ -120,6 +121,8 @@
             <p id="verdict-sub"></p>
           </div>
           <img id="preview" alt="" hidden>
+          <video id="preview-video" muted playsinline controls hidden
+            style="max-height:76px;max-width:120px;border-radius:8px;border:1px solid var(--gl-border);margin-left:auto"></video>
         </div>
       </div>
       <div class="gl-grid two" style="margin-top:20px">
@@ -160,7 +163,7 @@
         </div>
         <div class="gl-card">
           <h3><span class="gl-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h10"/></svg></span>Hash bindings</h3>
-          <p>Recomputes the hard-binding content hash and every assertion's <code>hashed_uri</code>, so edits after signing show up.</p>
+          <p>Recomputes the hard-binding content hash — <code>c2pa.hash.data</code> for JPEG/PNG, <code>c2pa.hash.bmff.v2/.v3</code> for HEIC and MP4 — and every assertion's <code>hashed_uri</code>, so edits after signing show up.</p>
         </div>
         <div class="gl-card">
           <h3><span class="gl-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></span>RFC 3161 timestamp</h3>

@@ -1,7 +1,7 @@
 github.com/fxamacker/cbor/v2 v2.9.2 h1:X4Ksno9+x3cz0TZv69ec1hxP/+tymuR8PXQJyDwfh78=
 github.com/fxamacker/cbor/v2 v2.9.2/go.mod h1:vM4b+DJCtHn+zz7h3FFp/hDAI9WNWCsZj23V5ytsSxQ=
-github.com/richardwooding/c2pa v0.2.0 h1:GJ8GuYW0p6ZtnMbdVGhShT5BcMbwdMHNZd3yhUdssGg=
-github.com/richardwooding/c2pa v0.2.0/go.mod h1:hwm73tcBNm4aUzF6TM/FQNm8gMrom17sct+iRSEWV2M=
+github.com/richardwooding/c2pa v0.3.0 h1:U4ziQnwccu2joO4geZhg+E7d7ivkkYSp6ERcf3o1yOA=
+github.com/richardwooding/c2pa v0.3.0/go.mod h1:hwm73tcBNm4aUzF6TM/FQNm8gMrom17sct+iRSEWV2M=
 github.com/veraison/go-cose v1.3.0 h1:2/H5w8kdSpQJyVtIhx8gmwPJ2uSz1PkyWFx0idbd7rk=
 github.com/veraison/go-cose v1.3.0/go.mod h1:df09OV91aHoQWLmy1KsDdYiagtXgyAwAl8vFeFn1gMc=
 github.com/x448/float16 v0.8.4 h1:qLwI1I70+NjRFUR3zs1JPUCgaCXSh3SW62uAKT1mSBM=

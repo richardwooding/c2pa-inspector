@@ -4,8 +4,8 @@
   "use strict";
 
   var $ = function (id) { return document.getElementById(id); };
-  var pick = $("pick"), sample = $("try-sample"), fileInput = $("file");
-  var dropzone = $("dropzone"), term = $("term");
+  var pick = $("pick"), sample = $("try-sample"), sampleVideo = $("try-sample-video");
+  var fileInput = $("file"), dropzone = $("dropzone"), term = $("term");
 
   // --- boot the Go runtime -------------------------------------------------
   var go = new Go();
@@ -25,8 +25,9 @@
 
   boot.then(function () {
     pick.disabled = false;
-    pick.textContent = "Choose an image";
+    pick.textContent = "Choose a file";
     sample.disabled = false;
+    sampleVideo.disabled = false;
   }).catch(function (err) {
     pick.textContent = "Validator failed to load";
     setTerm([
@@ -56,12 +57,16 @@
     if (f) inspectFile(f);
   });
 
-  sample.addEventListener("click", function () {
-    sample.classList.add("busy");
-    fetch("sample.jpg").then(function (r) { return r.arrayBuffer(); }).then(function (buf) {
-      inspectBytes(new Uint8Array(buf), "sample.jpg", new Blob([buf], { type: "image/jpeg" }));
-    }).finally(function () { sample.classList.remove("busy"); });
-  });
+  function wireSample(button, name, mime) {
+    button.addEventListener("click", function () {
+      button.classList.add("busy");
+      fetch(name).then(function (r) { return r.arrayBuffer(); }).then(function (buf) {
+        inspectBytes(new Uint8Array(buf), name, new Blob([buf], { type: mime }));
+      }).finally(function () { button.classList.remove("busy"); });
+    });
+  }
+  wireSample(sample, "sample.jpg", "image/jpeg");
+  wireSample(sampleVideo, "sample.mp4", "video/mp4");
 
   function inspectFile(f) {
     f.arrayBuffer().then(function (buf) {
@@ -112,16 +117,25 @@
       sub.textContent = name + " has Content Credentials, but validation failed: " + (res.firstFailure || "see the log") + ".";
     }
 
-    // preview thumbnail
-    var img = $("preview");
+    // preview thumbnail: <video> for video types; <img> otherwise, hidden on
+    // decode failure (Chrome cannot render HEIC/AVIF-HEVC in <img>).
+    var img = $("preview"), vid = $("preview-video");
     if (previewURL) { URL.revokeObjectURL(previewURL); previewURL = null; }
+    img.hidden = true;
+    vid.hidden = true;
+    vid.removeAttribute("src");
     if (blob && !res.error) {
       previewURL = URL.createObjectURL(blob);
-      img.src = previewURL;
-      img.alt = "Preview of " + name;
-      img.hidden = false;
-    } else {
-      img.hidden = true;
+      var isVideo = /^video\//.test(blob.type) || /\.(mp4|mov|m4v)$/i.test(name);
+      if (isVideo) {
+        vid.src = previewURL;
+        vid.hidden = false;
+      } else {
+        img.onerror = function () { img.hidden = true; };
+        img.src = previewURL;
+        img.alt = "Preview of " + name;
+        img.hidden = false;
+      }
     }
 
     // claims
