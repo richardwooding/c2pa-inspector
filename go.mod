@@ -1,6 +1,6 @@
 module github.com/richardwooding/c2pa-inspector
 
-go 1.26.2
+go 1.27.0
 
 require github.com/richardwooding/c2pa v0.3.0
 
