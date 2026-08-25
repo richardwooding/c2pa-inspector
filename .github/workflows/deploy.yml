@@ -22,6 +22,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: stable
+      - name: go fix (check)
+        run: GOOS=js GOARCH=wasm go fix -diff ./...
       - name: Build WASM
         run: |
           GOOS=js GOARCH=wasm go build -trimpath -ldflags="-s -w" -o site/c2pa.wasm ./wasm
