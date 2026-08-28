@@ -28,7 +28,7 @@ jobs:
         run: |
           GOOS=js GOARCH=wasm go build -trimpath -ldflags="-s -w" -o site/c2pa.wasm ./wasm
           cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" site/
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
