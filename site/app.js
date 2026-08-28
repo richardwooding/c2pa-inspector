@@ -44,7 +44,9 @@
     var v = window.c2paLibVersion();
     if (!v) return;
     el.textContent = v;
-    el.parentNode.hidden = false;
+    // The hidden attribute is on the wrapping span, not the immediate parent.
+    var wrap = el.closest("[hidden]");
+    if (wrap) wrap.hidden = false;
   }
 
   // --- input plumbing ------------------------------------------------------
