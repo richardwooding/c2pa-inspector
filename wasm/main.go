@@ -16,6 +16,7 @@ import (
 	"context"
 	"crypto/x509"
 	"encoding/json"
+	"runtime/debug"
 	"strings"
 	"syscall/js"
 	"time"
@@ -153,7 +154,29 @@ func inspect(data []byte) resultJSON {
 	return out
 }
 
+// c2paLibVersion reports the version of the c2pa library this binary was built
+// against, read from the embedded build info rather than injected at build
+// time so it cannot drift from go.mod.
+func c2paLibVersion() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return ""
+	}
+	for _, d := range info.Deps {
+		if d.Path == "github.com/richardwooding/c2pa" {
+			if d.Replace != nil {
+				return d.Replace.Version
+			}
+			return d.Version
+		}
+	}
+	return ""
+}
+
 func main() {
+	js.Global().Set("c2paLibVersion", js.FuncOf(func(js.Value, []js.Value) any {
+		return c2paLibVersion()
+	}))
 	js.Global().Set("c2paInspect", js.FuncOf(func(_ js.Value, args []js.Value) any {
 		if len(args) < 1 {
 			b, _ := json.Marshal(resultJSON{Error: "c2paInspect requires a Uint8Array argument"})

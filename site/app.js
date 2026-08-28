@@ -28,12 +28,24 @@
     pick.textContent = "Choose a file";
     sample.disabled = false;
     sampleVideo.disabled = false;
+    showEngineVersion();
   }).catch(function (err) {
     pick.textContent = "Validator failed to load";
     setTerm([
       ["fail", "✗ could not load c2pa.wasm — " + String(err)]
     ]);
   });
+
+  // The engine version comes from the wasm's own build info, so the footer
+  // always names the c2pa release actually compiled into the page.
+  function showEngineVersion() {
+    var el = document.querySelector("[data-c2pa-version]");
+    if (!el || typeof window.c2paLibVersion !== "function") return;
+    var v = window.c2paLibVersion();
+    if (!v) return;
+    el.textContent = v;
+    el.parentNode.hidden = false;
+  }
 
   // --- input plumbing ------------------------------------------------------
   pick.addEventListener("click", function () { fileInput.click(); });
