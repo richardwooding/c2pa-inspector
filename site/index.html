@@ -88,13 +88,6 @@
   .faq summary { cursor: pointer; font-weight: 600; }
   .faq p { color: var(--gl-muted); margin: 10px 0 0; }
 
-  /* gloam's install snippet overflows a narrow viewport: .gl-snip is a grid
-     item whose automatic minimum size is its min-content, and its <code> is
-     flex:1 with white-space:nowrap — so neither will shrink and the row pushes
-     the page sideways. Both need min-width:0. This belongs upstream in
-     gloam.css; it lives here so the fix survives the weekly asset sync. */
-  .gl-snip, .gl-snip code { min-width: 0; }
-
   #results[hidden] { display: none; }
   .busy { opacity: .6; pointer-events: none; }
 </style>
