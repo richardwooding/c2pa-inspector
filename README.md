@@ -3,7 +3,7 @@
 **Verify C2PA / Content Credentials entirely in your browser** —
 [richardwooding.github.io/c2pa-inspector](https://richardwooding.github.io/c2pa-inspector/)
 
-Drop a JPEG, PNG, HEIC, AVIF, MP4, or MOV on the page and get the full C2PA validation
+Drop a JPEG, PNG, HEIC, AVIF, MP4, MOV, or PDF on the page and get the full C2PA validation
 result: the COSE signature,
 the certificate chain against the official C2PA trust list, assertion and hard-binding
 hashes (`c2pa.hash.data` for JPEG/PNG, `c2pa.hash.bmff.v2`/`.v3` for BMFF assets), and the

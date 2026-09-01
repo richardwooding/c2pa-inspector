@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>c2pa inspector — verify Content Credentials in your browser</title>
-<meta name="description" content="Drop a JPEG, PNG, HEIC, AVIF, MP4, or MOV and validate its C2PA / Content Credentials manifest — COSE signature, certificate chain, hash bindings, RFC 3161 timestamp — entirely in your browser. Nothing is uploaded.">
+<meta name="description" content="Drop a JPEG, PNG, HEIC, AVIF, MP4, MOV, or PDF and validate its C2PA / Content Credentials manifest — COSE signature, certificate chain, hash bindings, RFC 3161 timestamp — entirely in your browser. Nothing is uploaded.">
 <script>try{var t=localStorage.getItem("gl-theme");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
 <link rel="stylesheet" href="gloam.css">
 <style>
@@ -92,10 +92,10 @@
         <p class="gl-hint" style="margin-top:14px">Both samples are c2pa-rs test fixtures — signed
           with <em>test</em> certificates, so you can watch the trust check fail honestly while the
           signatures and hashes pass.</p>
-        <input type="file" id="file" accept="image/jpeg,image/png,image/heic,image/heif,image/avif,video/mp4,video/quicktime,.jpg,.jpeg,.png,.heic,.heif,.avif,.mp4,.mov,.m4a" hidden>
+        <input type="file" id="file" accept="image/jpeg,image/png,image/heic,image/heif,image/avif,video/mp4,video/quicktime,application/pdf,.jpg,.jpeg,.png,.heic,.heif,.avif,.mp4,.mov,.m4a,.pdf" hidden>
       </div>
       <div class="gl-term dropzone" id="dropzone" role="button" tabindex="0"
-           aria-label="Drop a JPEG, PNG, HEIC, AVIF, MP4, or MOV here, or press Enter to choose a file">
+           aria-label="Drop a JPEG, PNG, HEIC, AVIF, MP4, MOV, or PDF here, or press Enter to choose a file">
         <div class="bar">
           <span class="dot" style="background:#ff5f56"></span>
           <span class="dot" style="background:#ffbd2e"></span>
@@ -103,7 +103,7 @@
           <span class="t">c2pa validate</span>
         </div>
 <pre id="term"><span class="pr">$</span> c2pa validate <span class="s">&lt;drop an image or video here&gt;</span>
-<span class="c"># JPEG · PNG · HEIC · AVIF · MP4 · MOV</span>
+<span class="c"># JPEG · PNG · HEIC · AVIF · MP4 · MOV · PDF</span>
 <span class="c"># nothing is uploaded — validation runs in-page</span></pre>
       </div>
     </div>
@@ -163,7 +163,7 @@
         </div>
         <div class="gl-card">
           <h3><span class="gl-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h10"/></svg></span>Hash bindings</h3>
-          <p>Recomputes the hard-binding content hash — <code>c2pa.hash.data</code> for JPEG/PNG, <code>c2pa.hash.bmff.v2/.v3</code> for HEIC and MP4 — and every assertion's <code>hashed_uri</code>, so edits after signing show up.</p>
+          <p>Recomputes the hard-binding content hash — <code>c2pa.hash.data</code> for JPEG/PNG and PDF, <code>c2pa.hash.bmff.v2/.v3</code> for HEIC and MP4 — and every assertion's <code>hashed_uri</code>, so edits after signing show up.</p>
         </div>
         <div class="gl-card">
           <h3><span class="gl-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></span>RFC 3161 timestamp</h3>

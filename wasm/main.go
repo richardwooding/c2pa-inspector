@@ -76,6 +76,10 @@ func sniffContainer(data []byte) (c2pa.Container, string, bool) {
 		return c2pa.PNG, "PNG", true
 	case len(data) >= 12 && string(data[4:8]) == "ftyp":
 		return c2pa.BMFF, bmffLabel(string(data[8:12])), true
+	// Matches the parser's own tolerance: %PDF- anywhere in the first 1 KiB,
+	// not just at offset 0, since producers prepend bytes.
+	case bytes.Contains(data[:min(len(data), 1024)], []byte("%PDF-")):
+		return c2pa.PDF, "PDF", true
 	default:
 		return "", "", false
 	}
