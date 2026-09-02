@@ -175,7 +175,8 @@
       verdict.classList.add("ok"); mark.textContent = "✓";
       title.textContent = "Verified";
       sub.textContent = name + " — signature, trust chain, and hash bindings all check out" +
-        (res.verifiedSignedAt ? "; signed at " + res.verifiedSignedAt : "") + ".";
+        (res.verifiedSigner ? "; verifiably signed by " + res.verifiedSigner : "") +
+        (res.verifiedSignedAt ? " at " + res.verifiedSignedAt : "") + ".";
     } else {
       verdict.classList.add("bad"); mark.textContent = "✗";
       title.textContent = "Not verified";
@@ -208,7 +209,8 @@
       if (res.attribution === "unknown") {
         addClaim(claims, "attribution", "unknown — the manifest is not associated with this file, so it may describe something the file carries");
       }
-      addClaim(claims, "signed by", res.signedBy);
+      addClaim(claims, "signed by (claimed)", res.signedBy);
+      addClaim(claims, "signed by (verified)", res.verifiedSigner);
       addClaim(claims, "claimed time", res.claimedSignedAt);
       addClaim(claims, "verified time", res.verifiedSignedAt || "— (no trusted timestamp)");
       addClaim(claims, "manifest", res.activeManifestLabel);

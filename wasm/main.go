@@ -50,6 +50,7 @@ type resultJSON struct {
 	SoftwareAgent       string        `json:"softwareAgent,omitempty"`
 	Attribution         string        `json:"attribution,omitempty"`
 	SignedBy            string        `json:"signedBy,omitempty"`
+	VerifiedSigner      string        `json:"verifiedSigner,omitempty"`
 	ClaimedSignedAt     string        `json:"claimedSignedAt,omitempty"`
 	Valid               bool          `json:"valid"`
 	VerifiedSignedAt    string        `json:"verifiedSignedAt,omitempty"`
@@ -154,15 +155,19 @@ func inspect(data []byte) resultJSON {
 	r := c2pa.Validate(context.Background(), container, bytes.NewReader(data))
 
 	out := resultJSON{
-		Container:           name,
-		Present:             r.Info.Present,
-		ClaimGenerator:      r.Info.ClaimGenerator,
-		Title:               r.Info.Title,
-		Format:              r.Info.Format,
-		AIGenerated:         r.Info.AIGenerated,
-		SoftwareAgent:       r.Info.SoftwareAgent,
-		Attribution:         string(r.Info.Attribution),
-		SignedBy:            r.Info.SignedBy,
+		Container:      name,
+		Present:        r.Info.Present,
+		ClaimGenerator: r.Info.ClaimGenerator,
+		Title:          r.Info.Title,
+		Format:         r.Info.Format,
+		AIGenerated:    r.Info.AIGenerated,
+		SoftwareAgent:  r.Info.SoftwareAgent,
+		Attribution:    string(r.Info.Attribution),
+		SignedBy:       r.Info.SignedBy,
+		// Empty unless the identity was actually proven — the signature verified
+		// AND the chain reached a trust anchor. SignerChain below is the chain as
+		// PRESENTED, which is a claim.
+		VerifiedSigner:      r.VerifiedSigner(),
 		Valid:               r.Valid,
 		ActiveManifestLabel: r.ActiveManifestLabel,
 		Statuses:            make([]statusJSON, 0, len(r.Statuses)),
