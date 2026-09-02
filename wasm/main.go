@@ -146,13 +146,25 @@ func summarizeChain(chain []*x509.Certificate) []certSummary {
 	return out
 }
 
+// wasmDeadline bounds every call into the validator. The browser gives WASM
+// no other way to interrupt a pathological file — the PDF repair-pass review
+// measured 27s of main-thread freeze from a crafted 3.5 MB input before its
+// bound landed, and this is the insurance against the next such case.
+const wasmDeadline = 30 * time.Second
+
 func inspect(data []byte) resultJSON {
 	container, name, ok := sniffContainer(data)
 	if !ok {
 		return resultJSON{Error: "unsupported file type — drop a JPEG, PNG, WebP, GIF, TIFF, HEIC, AVIF, SVG, MP4, MOV, AVI, WAV, MP3 or PDF"}
 	}
 
-	r := c2pa.Validate(context.Background(), container, bytes.NewReader(data))
+	ctx, cancel := context.WithTimeout(context.Background(), wasmDeadline)
+	defer cancel()
+	r := c2pa.Validate(ctx, container, bytes.NewReader(data))
+	if ctx.Err() != nil {
+		return resultJSON{Container: name,
+			Error: "validation took too long and was stopped — the file may be malformed"}
+	}
 
 	out := resultJSON{
 		Container:      name,
@@ -222,7 +234,9 @@ func rawManifest(data []byte) manifestJSON {
 	if !ok {
 		return manifestJSON{Error: "unsupported file type"}
 	}
-	store, err := c2pa.ExtractStore(context.Background(), container, bytes.NewReader(data))
+	ctx, cancel := context.WithTimeout(context.Background(), wasmDeadline)
+	defer cancel()
+	store, err := c2pa.ExtractStore(ctx, container, bytes.NewReader(data))
 	if err != nil {
 		return manifestJSON{Container: name, Error: err.Error()}
 	}
@@ -231,7 +245,7 @@ func rawManifest(data []byte) manifestJSON {
 	}
 
 	out := manifestJSON{Container: name, StoreSize: len(store), Boxes: []boxJSON{}}
-	c2pa.WalkBoxes(context.Background(), store, func(label, tbox string, content []byte) {
+	c2pa.WalkBoxes(ctx, store, func(label, tbox string, content []byte) {
 		box := boxJSON{Label: label, Type: tbox, Size: len(content)}
 		var v any
 		if json.Unmarshal(content, &v) == nil {
