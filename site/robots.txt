@@ -2,4 +2,4 @@ User-agent: *
 Allow: /
 Disallow: /og.html
 
-Sitemap: https://richardwooding.github.io/c2pa-inspector/sitemap.xml
+Sitemap: https://c2pa-inspector.dev/sitemap.xml
