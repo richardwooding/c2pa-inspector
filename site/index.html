@@ -30,10 +30,50 @@
   :root[data-theme="dark"]  { --fail: #f85149; }
   :root[data-theme="light"] { --fail: #cf222e; }
 
-  .dropzone { cursor: pointer; transition: border-color .15s ease, box-shadow .15s ease; }
-  .dropzone:hover, .dropzone:focus-visible,
-  .dropzone.dragover { border-color: var(--gl-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--gl-accent) 25%, transparent); }
-  .dropzone pre { min-height: 200px; }
+  /* Desktop keeps the copy and its buttons stacked on the left with the drop
+     target beside them. On a phone the single column would push the target
+     below the fold behind the sample buttons, so it moves up between the two. */
+  .hero { align-items: start; }
+  .hero-copy    { grid-column: 1; grid-row: 1; }
+  .hero-actions { grid-column: 1; grid-row: 2; }
+  .hero .dropzone { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+  @media (max-width: 860px) {
+    .hero-copy, .hero-actions, .hero .dropzone { grid-column: 1; }
+    .hero-copy { grid-row: 1; }
+    .hero .dropzone { grid-row: 2; }
+    .hero-actions { grid-row: 3; }
+  }
+
+  /* The front door. It was a faux-terminal, which reads as "you must be a
+     developer to use this" to exactly the visitor who most needs the tool. */
+  .dropzone { cursor: pointer; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 6px; text-align: center; min-height: 340px; padding: 34px 26px;
+    border: 2px dashed var(--gl-border); border-radius: var(--gl-radius);
+    background: color-mix(in srgb, var(--gl-panel) 55%, transparent);
+    transition: border-color .15s ease, background .15s ease, box-shadow .15s ease; }
+  .dropzone:hover, .dropzone:focus-visible, .dropzone.dragover {
+    border-color: var(--gl-accent); background: color-mix(in srgb, var(--gl-accent) 7%, transparent); }
+  .dropzone:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--gl-accent) 30%, transparent); }
+  .dropzone.dragover { border-style: solid; }
+
+  .dz-icon { width: 54px; height: 54px; color: var(--gl-accent); margin-bottom: 6px;
+    transition: transform .15s ease; }
+  .dropzone:hover .dz-icon, .dropzone.dragover .dz-icon { transform: translateY(-3px); }
+  .dz-lead { margin: 0; font-size: 1.24rem; font-weight: 650; color: var(--gl-fg); }
+  .dz-sub { margin: 0; color: var(--gl-muted); font-size: .95rem; }
+  .dz-formats { margin: 16px 0 0; justify-content: center; }
+  .dz-formats .more { opacity: .62; }
+  .dz-privacy { display: flex; align-items: center; gap: 7px; margin: 18px 0 0;
+    color: var(--gl-faint); font-size: .86rem; }
+  .dz-privacy svg { width: 15px; height: 15px; flex: none; }
+  .dz-status { margin: 12px 0 0; min-height: 1.2em; font: 600 .88rem/1.4 var(--gl-mono); }
+  .dz-status.working { color: var(--gl-accent-2); }
+  .dz-status.bad { color: var(--fail); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .dropzone, .dz-icon { transition: none; }
+    .dropzone:hover .dz-icon, .dropzone.dragover .dz-icon { transform: none; }
+  }
 
   .gl-term pre .fail { color: var(--fail); }
   .gl-term pre .info { color: var(--gl-faint); }
@@ -122,43 +162,50 @@
 
 <main id="main">
   <section class="gl-hero">
-    <div class="gl-wrap gl-hero-grid">
-      <div>
+    <div class="gl-wrap gl-hero-grid hero">
+      <div class="hero-copy">
         <p class="gl-eyebrow">content credentials · c2pa · private by construction</p>
         <h1>Who made this file, <span class="gl-grad">and has it changed since?</span></h1>
-        <p class="sub">Drop in a photo, video, audio file or PDF. If it carries Content
-          Credentials, you'll see the tool that made it — including whether that tool was
-          AI — who signed it, when, and whether a single byte has moved since. Your file
-          never leaves this page.</p>
+        <p class="sub">If a file carries Content Credentials, you'll see what made it —
+          including whether that was AI — who signed it, and whether a single byte has
+          moved since.</p>
+      </div>
+      <div class="hero-actions">
         <div class="gl-cta">
           <button class="gl-btn primary" id="pick" disabled>Loading…</button>
           <button class="gl-btn ghost" id="try-sample" disabled>Try an image</button>
           <button class="gl-btn ghost" id="try-sample-video" disabled>Try a video</button>
           <button class="gl-btn ghost" id="try-sample-pdf" disabled>Try an AI-made PDF</button>
         </div>
-        <p class="gl-hint" style="margin-top:14px">Up to 10 files at once. The image and video
-          are c2pa-rs test fixtures signed with <em>test</em> certificates, so you can watch
-          the trust check fail honestly while the signatures and hashes pass. The PDF is a
-          real ChatGPT-generated document, and it verifies.</p>
+        <p class="gl-hint" style="margin-top:14px">The image and video are c2pa-rs test
+          fixtures signed with <em>test</em> certificates, so you can watch the trust check
+          fail honestly while the signatures and hashes pass. The PDF is a real
+          ChatGPT-generated document, and it verifies.</p>
         <input type="file" id="file" multiple hidden
           accept="image/jpeg,image/png,image/webp,image/gif,image/tiff,image/heic,image/heif,image/avif,image/svg+xml,video/mp4,video/quicktime,video/x-msvideo,audio/wav,audio/mpeg,application/pdf,.jpg,.jpeg,.png,.webp,.gif,.tif,.tiff,.dng,.heic,.heif,.avif,.svg,.mp4,.mov,.m4v,.m4a,.avi,.wav,.mp3,.pdf">
       </div>
-      <div class="gl-term dropzone" id="dropzone" role="button" tabindex="0"
-           aria-label="Drop files here, or press Enter to choose">
-        <div class="bar">
-          <span class="dot" style="background:#ff5f56"></span>
-          <span class="dot" style="background:#ffbd2e"></span>
-          <span class="dot" style="background:#27c93f"></span>
-          <span class="t">c2pa validate</span>
-        </div>
-<pre id="term"><span class="pr">$</span> c2pa validate <span class="s">&lt;drop files here&gt;</span>
-<span class="c"># images · video · audio · pdf</span>
-<span class="c"># jpeg png webp gif tiff dng</span>
-<span class="c"># heic avif svg mp4 mov avi</span>
-<span class="c"># wav mp3 pdf</span>
-<span class="c">#</span>
-<span class="c"># nothing is uploaded —</span>
-<span class="c"># validation runs in-page</span></pre>
+      <div class="dropzone" id="dropzone" role="button" tabindex="0"
+           aria-label="Drop files here, or press Enter to choose files">
+        <svg class="dz-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 16V4"/><path d="m7 9 5-5 5 5"/>
+          <path d="M20 15v3a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-3"/>
+        </svg>
+        <p class="dz-lead">Drop a file here</p>
+        <p class="dz-sub">or click to choose — up to 10 at once</p>
+        <ul class="gl-badges dz-formats">
+          <li class="gl-lang">JPEG</li><li class="gl-lang">PNG</li><li class="gl-lang">WebP</li>
+          <li class="gl-lang">GIF</li><li class="gl-lang">HEIC</li><li class="gl-lang">MP4</li>
+          <li class="gl-lang">MOV</li><li class="gl-lang">MP3</li><li class="gl-lang">PDF</li>
+          <li class="gl-lang more" title="Also TIFF, DNG, HEIF, AVIF, SVG, AVI, WAV and M4A">+6 more</li>
+        </ul>
+        <p class="dz-privacy">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>
+          </svg>
+          Your file stays on your device
+        </p>
+        <p class="dz-status" id="dz-status" role="status" aria-live="polite"></p>
       </div>
     </div>
   </section>

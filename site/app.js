@@ -9,7 +9,7 @@
   var $ = function (id) { return document.getElementById(id); };
   var pick = $("pick"), sample = $("try-sample"), sampleVideo = $("try-sample-video");
   var samplePDF = $("try-sample-pdf");
-  var fileInput = $("file"), dropzone = $("dropzone"), term = $("term");
+  var fileInput = $("file"), dropzone = $("dropzone"), dzStatus = $("dz-status");
   var results = $("results"), list = $("results-list"), countEl = $("results-count");
   var shareBtn = $("share"), clearBtn = $("clear"), tpl = $("result-template");
 
@@ -43,7 +43,7 @@
     restoreFromHash();
   }).catch(function (err) {
     pick.textContent = "Validator failed to load";
-    renderTerm(term, [["fail", "✗ could not load c2pa.wasm — " + String(err)]]);
+    setStatus("Could not load the validator — " + String(err), "bad");
   });
 
   // The engine version comes from the wasm's own build info, so the footer
@@ -85,12 +85,14 @@
     list.textContent = "";
     results.hidden = true;
     shareBtn.hidden = clearBtn.hidden = true;
+    setStatus("", "");
     if (location.hash) history.replaceState(null, "", location.pathname + location.search);
   });
 
   function wireSample(button, name, mime) {
     button.addEventListener("click", function () {
       button.classList.add("busy");
+      setStatus("Checking " + name + "…", "working");
       fetch(name).then(function (r) { return r.arrayBuffer(); }).then(function (buf) {
         reset();
         inspectBytes(new Uint8Array(buf), name, new Blob([buf], { type: mime }));
@@ -107,7 +109,7 @@
     var skipped = fileList.length - files.length;
     boot.then(function () {
       reset();
-      renderTerm(term, [["pr-line", "c2pa validate " + files.length + " file" + (files.length === 1 ? "" : "s")]]);
+      setStatus("Checking " + files.length + " file" + (files.length === 1 ? "" : "s") + "…", "working");
       return Promise.all(files.map(function (f) {
         return f.arrayBuffer().then(function (buf) { return { f: f, bytes: new Uint8Array(buf) }; });
       }));
@@ -129,9 +131,7 @@
     countEl.textContent = n + (n === 1 ? " file inspected" : " files inspected") +
       (skipped ? " · " + skipped + " skipped (10 at a time)" : "");
     $("results-h").textContent = n === 1 ? "Inspection result." : "Inspection results.";
-    // Mirror the first file's log into the hero terminal, so the page reads as
-    // one continuous action rather than jumping straight down.
-    if (rendered[0]) renderTerm(term, termLines(rendered[0].name, rendered[0].res, 8));
+    setStatus(summarise(), "");
     results.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
@@ -295,7 +295,7 @@
     }
   }
 
-  function termLines(name, res, limit) {
+  function termLines(name, res) {
     var lines = (res.statuses || []).map(function (s) {
       var cls = s.severity === "success" ? "ok" : s.severity === "failure" ? "fail" : "info";
       var glyph = s.severity === "success" ? "✓" : s.severity === "failure" ? "✗" : "·";
@@ -303,11 +303,7 @@
     });
     if (res.error) lines = [["fail", "✗ " + res.error]];
     if (!lines.length) lines = [["info", "· no validation statuses recorded"]];
-    var head = [["pr-line", "c2pa validate " + name]];
-    if (limit && lines.length > limit) {
-      return head.concat(lines.slice(0, limit), [["info", "… " + (lines.length - limit) + " more below"]]);
-    }
-    return head.concat(lines);
+    return [["pr-line", "c2pa validate " + name]].concat(lines);
   }
 
   function addClaim(dl, key, val) {
@@ -357,6 +353,31 @@
       flash(shareBtn, "Link in address bar");
     }
   });
+
+// The dropzone doubles as the page's status line: what it is doing now, or
+  // what it found. Previously this was a terminal transcript.
+  function setStatus(text, cls) {
+    dzStatus.className = "dz-status" + (cls ? " " + cls : "");
+    dzStatus.textContent = text || "";
+  }
+
+  // summarise says what happened in words a non-developer can act on, rather
+  // than restating the C2PA status codes the result cards already list.
+  function summarise() {
+    var verified = 0, failed = 0, none = 0, ai = 0;
+    rendered.forEach(function (r) {
+      if (r.res.error || (r.res.present && !r.res.valid)) failed++;
+      else if (r.res.present) verified++;
+      else none++;
+      if (r.res.present && r.res.aiGenerated) ai++;
+    });
+    var parts = [];
+    if (verified) parts.push(verified + " verified");
+    if (failed) parts.push(failed + " not verified");
+    if (none) parts.push(none + " with no credentials");
+    if (ai) parts.push(ai + " declared AI-generated");
+    return parts.join(" · ");
+  }
 
   function flash(btn, text) {
     var was = btn.textContent;
