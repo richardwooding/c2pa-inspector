@@ -1,2 +1,3 @@
 site/c2pa.wasm
 site/wasm_exec.js
+.DS_Store
