@@ -206,7 +206,9 @@
       addClaim(claims, "format", res.format);
       addClaim(claims, "container", res.container);
       addClaim(claims, "ai-generated", res.aiGenerated ? "yes — declared AI-generated" : "no");
-      if (res.attribution === "unknown") {
+      if (res.attribution === "embedded") {
+        addClaim(claims, "attribution", "embedded resource — this manifest records the provenance of something the file carries (an image or font inside a PDF), not of the file itself, so the signer below is not the document's");
+      } else if (res.attribution === "unknown") {
         addClaim(claims, "attribution", "unknown — the manifest is not associated with this file, so it may describe something the file carries");
       }
       addClaim(claims, "signed by (claimed)", res.signedBy);
