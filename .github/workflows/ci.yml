@@ -1,0 +1,58 @@
+name: CI
+
+# Pull-request gate. deploy.yml builds and ships on push to main; this runs the
+# same build plus the tests, natively for internal/ and under Node for wasm/.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - name: vet and test (native)
+        run: |
+          go vet ./...
+          go test -race -timeout 120s ./internal/...
+      - name: vet (js/wasm)
+        run: GOOS=js GOARCH=wasm go vet ./...
+      - name: go fix produces no diff (js/wasm)
+        run: |
+          diff=$(GOOS=js GOARCH=wasm go fix -diff ./...)
+          if [ -n "$diff" ]; then
+            echo "$diff"
+            echo "::error::go fix would modernize code; run 'GOOS=js GOARCH=wasm go fix ./...' and commit."
+            exit 1
+          fi
+      - name: build WASM
+        run: GOOS=js GOARCH=wasm go build -trimpath -ldflags="-s -w" -o c2pa.wasm ./wasm
+      - name: test (js/wasm under Node, real WebCrypto)
+        run: GOOS=js GOARCH=wasm go test -timeout 300s -exec "$(go env GOROOT)/lib/wasm/go_js_wasm_exec" ./wasm
+      - name: WASM size
+        run: |
+          raw=$(stat -c%s c2pa.wasm); gz=$(gzip -9 -c c2pa.wasm | wc -c)
+          printf '### c2pa.wasm\n\n| raw | gzip -9 |\n|---|---|\n| %s | %s |\n' "$raw" "$gz" >> "$GITHUB_STEP_SUMMARY"
+          echo "c2pa.wasm raw=$raw gzip=$gz"
+  js:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: syntax check
+        run: for f in site/*.js; do node --check "$f"; done
