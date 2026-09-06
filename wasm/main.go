@@ -1,14 +1,22 @@
 //go:build js && wasm
 
-// Command wasm exposes the pure-Go c2pa reader/validator to the browser as a
-// single global function:
+// Command wasm exposes the pure-Go c2pa reader, validator and signer to the
+// browser as global functions:
 //
 //	c2paInspect(bytes Uint8Array) -> JSON string
+//	c2paManifest(bytes Uint8Array) -> JSON string
+//	c2paLibVersion() -> string
+//	c2paCredentialCreate(name) -> Promise<{key: CryptoKey, certPEM, summary}>
+//	c2paCredentialImport(keyPEM, chainPEM) -> Promise<{key, certPEM, summary}>
+//	c2paSign(bytes, {key, certPEM, title, action, digitalSourceType, tsaURL})
+//	    -> Promise<{bytes: Uint8Array, report: JSON string}>
 //
-// The result carries the unverified claims (what Read surfaces), the full
-// validation outcome with per-step C2PA status codes, and a summary of the
-// signer certificate chain. All work happens in-page; no bytes leave the
-// browser.
+// The inspection result carries the unverified claims (what Read surfaces),
+// the full validation outcome with per-step C2PA status codes, and a summary
+// of the signer certificate chain. Signing keys live in WebCrypto,
+// non-extractable; Go only ever sees the public key and the signatures. All
+// work happens in-page; no bytes leave the browser unless a timestamp
+// authority is asked for.
 package main
 
 import (
@@ -16,6 +24,8 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"runtime/debug"
 	"syscall/js"
 
@@ -112,7 +122,12 @@ func c2paLibVersion() string {
 	return ""
 }
 
-func main() {
+// registerGlobals installs the page's entry points. The three inspection
+// functions are synchronous and return JSON strings, as app.js expects. The
+// three signing functions return Promises: they await WebCrypto, which can
+// only settle once the JS event loop turns, so their work runs on a goroutine
+// and the arguments are copied out of JS before it starts.
+func registerGlobals() {
 	js.Global().Set("c2paLibVersion", js.FuncOf(func(js.Value, []js.Value) any {
 		return c2paLibVersion()
 	}))
@@ -150,5 +165,57 @@ func main() {
 		return string(b)
 	}))
 
+	// c2paCredentialCreate(name) -> Promise<{key, certPEM, summary}>
+	js.Global().Set("c2paCredentialCreate", js.FuncOf(func(_ js.Value, args []js.Value) any {
+		name := ""
+		if len(args) > 0 && args[0].Type() == js.TypeString {
+			name = args[0].String()
+		}
+		return promisify(func() (any, error) { return credentialCreate(name) })
+	}))
+	// c2paCredentialImport(keyPEM, chainPEM) -> Promise<{key, certPEM, summary}>
+	js.Global().Set("c2paCredentialImport", js.FuncOf(func(_ js.Value, args []js.Value) any {
+		var keyPEM, chainPEM string
+		if len(args) > 0 && args[0].Type() == js.TypeString {
+			keyPEM = args[0].String()
+		}
+		if len(args) > 1 && args[1].Type() == js.TypeString {
+			chainPEM = args[1].String()
+		}
+		return promisify(func() (any, error) { return credentialImport(keyPEM, chainPEM) })
+	}))
+	// c2paSign(bytes, {key, certPEM, title, action, digitalSourceType, tsaURL})
+	//   -> Promise<{bytes: Uint8Array, report: string}>
+	js.Global().Set("c2paSign", js.FuncOf(func(_ js.Value, args []js.Value) any {
+		var data []byte
+		var opts signOptions
+		var argErr error
+		if len(args) < 2 {
+			argErr = errors.New("c2paSign requires a Uint8Array and an options object")
+		} else {
+			data, argErr = fromUint8Array(args[0])
+			if argErr == nil {
+				opts, argErr = parseSignOptions(args[1])
+			}
+		}
+		return promisify(func() (any, error) {
+			if argErr != nil {
+				return nil, argErr
+			}
+			out, rep, err := signAsset(data, opts)
+			if err != nil {
+				return nil, err
+			}
+			b, err := json.Marshal(rep)
+			if err != nil {
+				return nil, fmt.Errorf("%w: %v", errInternal, err)
+			}
+			return map[string]any{"bytes": toUint8Array(out), "report": string(b)}, nil
+		})
+	}))
+}
+
+func main() {
+	registerGlobals()
 	select {} // keep the Go runtime alive for future calls
 }
