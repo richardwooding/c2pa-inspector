@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>C2PA Inspector — check if an image is AI-generated or edited</title>
-<meta name="description" content="Drop a photo, video, audio file or PDF and see who made it, what made it, and whether it has been changed since it was signed. Full C2PA / Content Credentials validation — signature, certificate chain, hash bindings, timestamp — entirely in your browser. Nothing is uploaded.">
+<meta name="description" content="Drop a photo, video, audio file or PDF and see who made it, what made it, and whether it has been changed since it was signed — or sign one yourself with a key that never leaves your browser. Full C2PA / Content Credentials validation — signature, certificate chain, hash bindings, timestamp — entirely in your browser. Nothing is uploaded.">
 <link rel="canonical" href="https://c2pa-inspector.dev/">
 <meta name="robots" content="index, follow, max-image-preview:large">
 
@@ -130,6 +130,27 @@
 
   #results[hidden] { display: none; }
   .busy { opacity: .6; pointer-events: none; }
+
+  /* Signing forms. gloam ships no form styles, so these lean on its tokens. */
+  .sf label { display: block; margin: 12px 0 0; font-size: .9rem; color: var(--gl-muted); }
+  .sf input[type=text], .sf input[type=url], .sf select, .sf textarea { display: block; width: 100%;
+    margin-top: 5px; padding: 8px 10px; font: inherit; color: var(--gl-fg); background: var(--gl-panel-2);
+    border: 1px solid var(--gl-border); border-radius: 8px; box-sizing: border-box; }
+  .sf textarea { font-family: var(--gl-mono); font-size: .8rem; resize: vertical; }
+  .sf input[type=file] { display: block; margin-top: 6px; font-size: .86rem; color: var(--gl-muted); max-width: 100%; }
+  .sf label.check { display: flex; gap: 9px; align-items: flex-start; margin-top: 16px; color: var(--gl-fg); }
+  .sf label.check input { margin-top: 4px; flex: none; }
+  .sf details { margin-top: 14px; }
+  .sf summary { cursor: pointer; font-weight: 600; }
+  .sf .dz-status { margin-top: 12px; }
+  .sf dl.claims { margin-top: 6px; }
+  .trust { margin-top: 16px; padding: 12px 14px; border-radius: 10px; font-size: .93rem; line-height: 1.5;
+    border: 1px solid var(--gl-border); background: var(--gl-panel-2); }
+  .trust.bad { background: color-mix(in srgb, var(--gl-amber) 12%, transparent);
+    border-color: color-mix(in srgb, var(--gl-amber) 40%, transparent); }
+  .trust.ok { background: color-mix(in srgb, var(--gl-green) 10%, transparent);
+    border-color: color-mix(in srgb, var(--gl-green) 35%, transparent); }
+  #sign-result:empty { display: none; }
 </style>
 </head>
 <body class="gl">
@@ -149,6 +170,7 @@
     <button class="gl-nav-toggle" aria-label="Toggle navigation" data-gl-nav-toggle="nav" aria-expanded="false">☰</button>
     <nav id="nav">
       <a href="#checks">What it checks</a>
+      <a href="#sign">Sign a file</a>
       <a href="#faq">FAQ</a>
       <a href="#library">For developers</a>
       <button class="gl-theme-toggle" data-gl-theme-toggle aria-label="Toggle color theme" aria-pressed="true">
@@ -296,11 +318,122 @@
         </div>
         <div class="gl-card">
           <h3><span class="gl-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span>Private by construction</h3>
-          <p>The validator is WebAssembly running in your tab. No upload, no server, no analytics on your files — and the shareable link carries the result, never the file.</p>
+          <p>The validator is WebAssembly running in your tab. No upload, no server, no analytics on your files — and the shareable link carries the result, never the file. Signing keys live in your browser's WebCrypto store, non-extractable.</p>
         </div>
       </div>
     </div>
   </section>
+
+  <section id="sign" class="gl-section">
+    <div class="gl-wrap">
+      <p class="gl-eyebrow">sign</p>
+      <h2>Sign a file with your own key.</h2>
+      <p class="gl-lede">Embed Content Credentials right here. The private key is created or imported
+        into your browser's WebCrypto store as non-extractable and never leaves it; the page only ever
+        asks it for signatures. Be clear about what that buys: a <em>test identity</em> made on this
+        page proves a file has not changed since you signed it — not who you are — and every verifier,
+        this one included, will say the signer is untrusted. Import a certificate chain from a CA on the
+        C2PA trust list to be trusted.</p>
+      <div class="gl-grid two sf" style="margin-top:28px">
+        <div class="gl-card">
+          <h3>Identity</h3>
+          <div data-cred-none>
+            <p class="gl-hint">No signing identity yet. Create a self-signed test identity in one
+              click, or import your own key and certificate chain.</p>
+            <label>Name on the test certificate
+              <input type="text" id="cred-name" value="Test identity" maxlength="64" autocomplete="off"></label>
+            <p style="margin:14px 0 0"><button class="gl-btn primary" id="cred-create" disabled>Create a test identity</button></p>
+            <details>
+              <summary>Import my own key and certificate</summary>
+              <label>Private key (PEM, unencrypted — PKCS#8, EC or RSA)
+                <textarea id="import-key" rows="4" spellcheck="false" autocomplete="off"></textarea></label>
+              <input type="file" id="import-key-file" accept=".pem,.key,.p8" aria-label="Choose a key file">
+              <label>Certificate chain (PEM, leaf first)
+                <textarea id="import-chain" rows="4" spellcheck="false"></textarea></label>
+              <input type="file" id="import-chain-file" accept=".pem,.crt,.cer,.cert" aria-label="Choose a certificate file">
+              <p style="margin:14px 0 0"><button class="gl-btn ghost" id="cred-import-btn" disabled>Import</button></p>
+              <p class="gl-hint">The key is imported into WebCrypto as non-extractable and the pasted text
+                is discarded. The key must match the first certificate — this is checked with a test
+                signature. ECDSA P-256/384/521, RSA (2048+) and Ed25519 where the browser supports it.</p>
+            </details>
+          </div>
+          <div data-cred-have hidden>
+            <dl class="claims" data-cred-summary></dl>
+            <p class="gl-hint" data-cred-kind style="margin-top:12px"></p>
+            <label class="check"><input type="checkbox" id="cred-remember">
+              <span>Remember in this browser <span class="gl-hint">— stored in IndexedDB, still
+                non-extractable. Safari may forget it after a week without a visit.</span></span></label>
+            <p style="margin:14px 0 0"><button class="gl-btn ghost" id="cred-forget">Forget this identity</button></p>
+          </div>
+          <p class="dz-status" id="cred-status" role="status" aria-live="polite"></p>
+        </div>
+
+        <div class="gl-card">
+          <h3>Sign</h3>
+          <label>File to sign
+            <input type="file" id="sign-file"
+              accept="image/jpeg,image/png,image/webp,image/gif,image/tiff,image/heic,image/heif,image/avif,image/svg+xml,video/mp4,video/quicktime,video/x-msvideo,audio/wav,audio/mpeg,application/pdf,.jpg,.jpeg,.png,.webp,.gif,.tif,.tiff,.dng,.heic,.heif,.avif,.svg,.mp4,.mov,.m4v,.m4a,.avi,.wav,.mp3,.pdf"></label>
+          <label>Title <input type="text" id="sign-title" placeholder="defaults to the file name" autocomplete="off"></label>
+          <label>Action
+            <select id="sign-action">
+              <option value="auto" selected>auto — opened if the file already has credentials, else created</option>
+              <option value="created">created — nothing preceded this file</option>
+              <option value="opened">opened — chain to the credentials already in the file</option>
+            </select></label>
+          <label>Digital source type
+            <select id="sign-dst">
+              <option value="" selected>not stated</option>
+              <option value="digitalCapture">digitalCapture — a camera or scanner</option>
+              <option value="trainedAlgorithmicMedia">trainedAlgorithmicMedia — generated by AI</option>
+              <option value="compositeWithTrainedAlgorithmicMedia">compositeWithTrainedAlgorithmicMedia — edited with AI</option>
+              <option value="algorithmicMedia">algorithmicMedia — generated by non-AI software</option>
+              <option value="compositeCapture">compositeCapture</option>
+              <option value="compositeSynthetic">compositeSynthetic</option>
+              <option value="digitalArt">digitalArt</option>
+              <option value="dataDrivenMedia">dataDrivenMedia</option>
+              <option value="minorHumanEdits">minorHumanEdits</option>
+              <option value="algorithmicallyEnhanced">algorithmicallyEnhanced</option>
+              <option value="screenCapture">screenCapture</option>
+              <option value="virtualRecording">virtualRecording</option>
+              <option value="negativeFilm">negativeFilm</option>
+              <option value="positiveFilm">positiveFilm</option>
+              <option value="print">print</option>
+              <option value="empty">empty — C2PA's own: an empty asset</option>
+              <option value="custom">custom URL…</option>
+            </select></label>
+          <input type="url" id="sign-dst-custom" placeholder="http://cv.iptc.org/newscodes/digitalsourcetype/…" hidden aria-label="Custom digital source type URL">
+          <details>
+            <summary>Advanced</summary>
+            <label>Timestamp authority URL (RFC 3161)
+              <input type="url" id="sign-tsa" placeholder="https://…" autocomplete="off"></label>
+            <p class="gl-hint">A browser can only reach a timestamp authority that allows cross-origin
+              requests over https — most public ones do not. If it fails, nothing is written.</p>
+          </details>
+          <p style="margin:16px 0 0"><button class="gl-btn primary" id="sign-go" disabled>Sign and download</button></p>
+          <p class="dz-status" id="sign-status" role="status" aria-live="polite"></p>
+        </div>
+      </div>
+      <div id="sign-result" class="sf" style="margin-top:22px"></div>
+    </div>
+  </section>
+
+  <template id="signed-template">
+    <div class="gl-card">
+      <div class="verdict ok">
+        <span class="mark" aria-hidden="true">✓</span>
+        <div>
+          <h3>Signed</h3>
+          <p data-signed-sub></p>
+        </div>
+      </div>
+      <div class="trust" data-trust></div>
+      <dl class="claims" data-signed-claims style="margin-top:16px"></dl>
+      <p class="gl-cta" style="margin:16px 0 0">
+        <button class="gl-btn primary" data-signed-download>Download again</button>
+        <button class="gl-btn ghost" data-signed-inspect>Inspect the signed file</button>
+      </p>
+    </div>
+  </template>
 
   <section id="faq" class="gl-section">
     <div class="gl-wrap">
@@ -346,6 +479,17 @@
             so your file is read by your own browser and never sent over the network. There
             is no server to upload to. The shareable link encodes the <em>result</em> in the
             URL, never the file.</p>
+        </details>
+        <details>
+          <summary>Can I sign my own files here?</summary>
+          <p>Yes. The page creates a key in your browser's WebCrypto store as non-extractable, or
+            imports one you already have, and the validator's Go code — compiled to WebAssembly —
+            builds the manifest and asks the key for each signature. The key never leaves the
+            browser; only the signed file does, as a download. A test identity made here is
+            self-signed, so verifiers will report the signature as valid and the signer as untrusted
+            — that is the honest outcome, not a fault. To be trusted, import a certificate chain
+            issued by a CA on the C2PA trust list. Timestamping needs a timestamp authority that allows
+            cross-origin requests, which most public ones do not.</p>
         </details>
         <details>
           <summary>Which file types can it read?</summary>
@@ -414,7 +558,8 @@ r := c2pa.<span class="k">Validate</span>(ctx, c2pa.JPEG, file)
         "Runs entirely client-side via WebAssembly",
         "Raw JUMBF manifest box tree",
         "Up to 10 files at once",
-        "JPEG, PNG, WebP, GIF, TIFF, DNG, HEIC, AVIF, SVG, MP4, MOV, AVI, WAV, MP3, PDF"
+        "JPEG, PNG, WebP, GIF, TIFF, DNG, HEIC, AVIF, SVG, MP4, MOV, AVI, WAV, MP3, PDF",
+        "Sign files with a test identity or your own certificate — the key stays in the browser's WebCrypto store"
       ]
     },
     {
@@ -458,6 +603,7 @@ r := c2pa.<span class="k">Validate</span>(ctx, c2pa.JPEG, file)
 
 <script src="wasm_exec.js"></script>
 <script src="app.js"></script>
+<script src="sign.js"></script>
 <script src="gloam.js" defer></script>
 </body>
 </html>

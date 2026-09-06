@@ -336,6 +336,17 @@
     });
   }
 
+  // sign.js hands a freshly signed file back here so it gets the same honest
+  // verdict card as any dropped file — the page's own trust list, no favours.
+  window.c2paInspectorInspect = function (bytes, name, blob) {
+    return boot.then(function () {
+      reset();
+      setStatus("Checking " + name + "…", "working");
+      inspectBytes(bytes, name, blob);
+      finish();
+    });
+  };
+
   // --- shareable links -----------------------------------------------------
   // The RESULT travels in the fragment, never the file — a fragment is not sent
   // to any server, so sharing a report cannot leak the bytes it came from.
