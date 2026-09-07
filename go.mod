@@ -2,7 +2,7 @@ module github.com/richardwooding/c2pa-inspector
 
 go 1.27.0
 
-require github.com/richardwooding/c2pa v0.17.0
+require github.com/richardwooding/c2pa v0.18.0
 
 require (
 	github.com/fxamacker/cbor/v2 v2.9.3 // indirect
