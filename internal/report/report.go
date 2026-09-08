@@ -43,18 +43,24 @@ type Status struct {
 // Result is the inspection outcome for one file: the unverified claims, the
 // validation verdict with every status, and the signer chain as presented.
 type Result struct {
-	Container           string        `json:"container"`
-	Present             bool          `json:"present"`
-	ClaimGenerator      string        `json:"claimGenerator,omitempty"`
-	Title               string        `json:"title,omitempty"`
-	Format              string        `json:"format,omitempty"`
-	AIGenerated         bool          `json:"aiGenerated"`
-	SoftwareAgent       string        `json:"softwareAgent,omitempty"`
-	Attribution         string        `json:"attribution,omitempty"`
-	SignedBy            string        `json:"signedBy,omitempty"`
-	VerifiedSigner      string        `json:"verifiedSigner,omitempty"`
-	ClaimedSignedAt     string        `json:"claimedSignedAt,omitempty"`
-	Valid               bool          `json:"valid"`
+	Container       string `json:"container"`
+	Present         bool   `json:"present"`
+	ClaimGenerator  string `json:"claimGenerator,omitempty"`
+	Title           string `json:"title,omitempty"`
+	Format          string `json:"format,omitempty"`
+	AIGenerated     bool   `json:"aiGenerated"`
+	SoftwareAgent   string `json:"softwareAgent,omitempty"`
+	Attribution     string `json:"attribution,omitempty"`
+	SignedBy        string `json:"signedBy,omitempty"`
+	VerifiedSigner  string `json:"verifiedSigner,omitempty"`
+	ClaimedSignedAt string `json:"claimedSignedAt,omitempty"`
+	Valid           bool   `json:"valid"`
+	// Binding is what the hard binding proved about THESE bytes — "verified",
+	// "failed", "unevaluated" or "none" — which is not the same question as
+	// Valid. A PDF whose manifest is attached to an object it carries is valid
+	// with an unevaluated binding: nothing hashed the document. The page says so
+	// rather than letting a green tick imply it.
+	Binding             string        `json:"binding"`
 	VerifiedSignedAt    string        `json:"verifiedSignedAt,omitempty"`
 	ActiveManifestLabel string        `json:"activeManifestLabel,omitempty"`
 	FirstFailure        string        `json:"firstFailure,omitempty"`
@@ -170,6 +176,7 @@ func FromValidation(container string, r c2pa.ValidationResult) Result {
 		// PRESENTED, which is a claim.
 		VerifiedSigner:      r.VerifiedSigner(),
 		Valid:               r.Valid,
+		Binding:             r.Binding.String(),
 		ActiveManifestLabel: r.ActiveManifestLabel,
 		Statuses:            make([]Status, 0, len(r.Statuses)),
 		SignerChain:         SummarizeChain(r.SignerChain),

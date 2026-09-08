@@ -12,6 +12,12 @@ recorded. Nothing is uploaded; the validator is
 [richardwooding/c2pa](https://github.com/richardwooding/c2pa) (pure Go, no cgo) compiled to
 WebAssembly and running in the page.
 
+The card answers two questions separately, because they come apart on real files: whether the
+signature and the signer check out, and whether **these bytes** are the ones that were signed. A
+credential can be perfectly valid while nothing here proves it describes the file you dropped — a
+PDF manifest attached to an image the document carries, a fragmented video inspected without its
+fragments — and that reads as "Signed, but not bound to this file" rather than as a green tick.
+
 ## Signing in the browser
 
 The page can also embed Content Credentials into a file. The private key is created (or

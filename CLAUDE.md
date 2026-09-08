@@ -67,6 +67,18 @@ names the c2pa engine version.
   16 MiB triage cap; a store at the end of a larger file (PDF incremental update, BMFF box after
   `mdat`) would look absent and `created` would then be refused as already signed. `ExtractStore`
   reads as far as `Validate` since c2pa v0.16.1.
+- **The card must not let a green tick answer a question the validator did not.** `Result.Binding`
+  (c2pa v0.19.0's `ValidationResult.Binding`, passed through verbatim) says whether THESE bytes are
+  the signed ones: `verified`, `failed`, `unevaluated` or `none`. A valid result with an
+  `unevaluated` binding — a PDF manifest attached to an object the file carries (§A.4.3), a file
+  past the scan cap, a fragmented video without its fragments — renders as the neutral verdict
+  "Signed, but not bound to this file", NOT as "Verified"; `bindingSentence` in `app.js` is the one
+  place that words it, and the FAQ (both the `<details>` and the JSON-LD copy of it) explains the
+  phrase. `sign.js` derives its `bound` row from `report.binding` too, rather than matching
+  `assertion.dataHash.match`/`bmffHash.match` by hand as it used to — that hand-rolled test missed
+  `boxesHash` and the merkle paths entirely. Never reconstruct the state from `statuses`: the
+  library records it at the decision point because an update manifest's binding statuses carry the
+  PARENT manifest's label and `general.unsupported` is overloaded.
 - **The sign report is the page's own default-trust verdict.** A self-signed test identity must read
   `signingCredential.untrusted` in the Signed card in the same words the inspector uses — that is
   the honest outcome, and `internal/credential`'s end-to-end test pins it. Do not anchor the report

@@ -246,8 +246,10 @@
     var q = function (sel) { return node.querySelector(sel); };
     var codes = {};
     (report.statuses || []).forEach(function (s) { codes[s.code] = s.severity; });
-    var bound = codes["claimSignature.validated"] === "success" &&
-      (codes["assertion.dataHash.match"] === "success" || codes["assertion.bmffHash.match"] === "success");
+    // The library answers "is the file bound to this manifest" itself now, and
+    // its answer covers every binding — box hashes and fragmented merkle trees
+    // included, which the old status-code match here did not.
+    var bound = codes["claimSignature.validated"] === "success" && report.binding === "verified";
     var trusted = codes["signingCredential.trusted"] === "success";
 
     q("[data-signed-sub]").textContent = name + " — " + (report.activeManifestLabel ? "manifest " + report.activeManifestLabel : "signed") +
