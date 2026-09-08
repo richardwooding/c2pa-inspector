@@ -171,12 +171,22 @@
       verdict.classList.add("none"); mark.textContent = "·";
       title.textContent = "No Content Credentials";
       sub.textContent = name + " (" + res.container + ") carries no C2PA manifest. Most files don't — absence proves nothing either way.";
-    } else if (res.valid) {
+    } else if (res.valid && res.binding !== "unevaluated" && res.binding !== "none") {
       verdict.classList.add("ok"); mark.textContent = "✓";
       title.textContent = "Verified";
       sub.textContent = name + " — signature, trust chain, and hash bindings all check out" +
         (res.verifiedSigner ? "; verifiably signed by " + res.verifiedSigner : "") +
         (res.verifiedSignedAt ? " at " + res.verifiedSignedAt : "") + ".";
+    } else if (res.valid) {
+      // Valid, but nothing proved these bytes are the signed ones — a PDF whose
+      // manifest hangs off an object it carries, a file past the scan cap, a
+      // fragmented stream without its fragments. A green tick would say more
+      // than the validator did.
+      verdict.classList.add("none"); mark.textContent = "?";
+      title.textContent = "Signed, but not bound to this file";
+      sub.textContent = name + " — the signature and trust chain check out" +
+        (res.verifiedSigner ? ", verifiably signed by " + res.verifiedSigner : "") +
+        ", but " + bindingSentence(res).toLowerCase();
     } else {
       verdict.classList.add("bad"); mark.textContent = "✗";
       title.textContent = "Not verified";
@@ -211,6 +221,7 @@
       } else if (res.attribution === "unknown") {
         addClaim(claims, "attribution", "unknown — the manifest is not associated with this file, so it may describe something the file carries");
       }
+      addClaim(claims, "content binding", bindingSentence(res));
       addClaim(claims, "signed by (claimed)", res.signedBy);
       addClaim(claims, "signed by (verified)", res.verifiedSigner);
       addClaim(claims, "claimed time", res.claimedSignedAt);
@@ -297,6 +308,30 @@
       img.alt = "Preview of " + name;
       img.hidden = false;
     }
+  }
+
+  // bindingSentence says what the hard binding proved about THESE bytes — the
+  // question the signature and the trust chain do not answer. "unevaluated" is
+  // the one that needs saying: it is not a weaker pass, and its usual cause is
+  // visible in the result, so name it.
+  function bindingSentence(res) {
+    switch (res.binding) {
+      case "verified":
+        return "These bytes are the ones that were signed.";
+      case "failed":
+        return "These bytes are NOT the ones that were signed — the file has changed since signing.";
+      case "unevaluated":
+        if (res.attribution === "embedded" || res.attribution === "unknown") {
+          return "Nothing here proves these are the signed bytes — the manifest describes something this file carries, not the file.";
+        }
+        if (res.container === "MP4" || res.container === "QuickTime MOV") {
+          return "Nothing here proves these are the signed bytes — if this is a fragmented stream, its fragments are needed to check it.";
+        }
+        return "Nothing here proves these are the signed bytes — a hard binding exists, and this inspection did not check it against the file.";
+      case "none":
+        return res.present ? "No hard binding: this manifest binds no bytes at all." : "";
+    }
+    return "";
   }
 
   function termLines(name, res) {

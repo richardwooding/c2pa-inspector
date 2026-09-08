@@ -474,6 +474,17 @@
             who signed the <em>original</em>; it simply no longer describes the file you have.</p>
         </details>
         <details>
+          <summary>Why does a file say &ldquo;signed, but not bound to this file&rdquo;?</summary>
+          <p>Because the credential is real and nothing checked it against these bytes. It
+            happens when the manifest describes something the file <em>carries</em> rather
+            than the file itself — an image or a font inside a PDF, which is where the C2PA
+            spec says such a manifest belongs — and when a fragmented video is inspected
+            without its fragments. It is neither a pass nor a failure: the signature and the
+            signer are exactly as reported, and the question &ldquo;are these the signed
+            bytes?&rdquo; simply has no answer here. A green tick would claim more than the
+            validator did.</p>
+        </details>
+        <details>
           <summary>Are my files uploaded anywhere?</summary>
           <p>No. The validator is compiled from Go to WebAssembly and runs inside this page,
             so your file is read by your own browser and never sent over the network. There
@@ -584,6 +595,11 @@ r := c2pa.<span class="k">Validate</span>(ctx, c2pa.JPEG, file)
           "@type": "Question",
           "name": "What does a failed hash binding mean?",
           "acceptedAnswer": { "@type": "Answer", "text": "The manifest records a hash of the file's own bytes at signing time. If that hash no longer matches, the content has changed since it was signed — a crop, a re-compression, or a deliberate edit. The credential still tells you truthfully who signed the original; it simply no longer describes the file you have." }
+        },
+        {
+          "@type": "Question",
+          "name": "Why does a file say \u201csigned, but not bound to this file\u201d?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Because the credential is real and nothing checked it against these bytes. It happens when the manifest describes something the file carries rather than the file itself — an image or a font inside a PDF, which is where the C2PA spec says such a manifest belongs — and when a fragmented video is inspected without its fragments. It is neither a pass nor a failure: the signature and the signer are exactly as reported, and the question of whether these are the signed bytes simply has no answer here." }
         },
         {
           "@type": "Question",

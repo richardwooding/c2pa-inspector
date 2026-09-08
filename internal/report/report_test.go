@@ -74,9 +74,15 @@ func TestFromValidation_Fixture(t *testing.T) {
 	if res.VerifiedSigner != "" || res.SignedBy == "" || len(res.SignerChain) == 0 {
 		t.Fatalf("signer fields: verified=%q claimed=%q chain=%d", res.VerifiedSigner, res.SignedBy, len(res.SignerChain))
 	}
+	// The binding is a different question from Valid, and here they disagree:
+	// the signer is not anchored, but the bytes are the ones it signed. The card
+	// says both, so a failing trust chain never reads as a changed file.
+	if res.Binding != "verified" {
+		t.Fatalf("Binding = %q, want verified", res.Binding)
+	}
 	// The JSON contract with app.js: these keys must exist under these names.
 	raw, _ := json.Marshal(res)
-	for _, key := range []string{`"container"`, `"present"`, `"valid"`, `"statuses"`, `"signerChain"`, `"claimGenerator"`, `"firstFailure"`} {
+	for _, key := range []string{`"container"`, `"present"`, `"valid"`, `"binding"`, `"statuses"`, `"signerChain"`, `"claimGenerator"`, `"firstFailure"`} {
 		if !bytes.Contains(raw, []byte(key)) {
 			t.Errorf("JSON lacks %s", key)
 		}
@@ -87,5 +93,9 @@ func TestFromValidation_NoManifest(t *testing.T) {
 	res := FromValidation("PNG", c2pa.Validate(context.Background(), c2pa.PNG, bytes.NewReader([]byte("\x89PNG\r\n\x1a\n"))))
 	if res.Present || res.Valid || res.Statuses == nil || res.SignerChain == nil {
 		t.Fatalf("result = %+v", res)
+	}
+	// Nothing bound it, which is not the same claim as "the file changed".
+	if res.Binding != "none" {
+		t.Fatalf("Binding = %q, want none", res.Binding)
 	}
 }
