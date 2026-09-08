@@ -371,7 +371,15 @@ func TestSignAsset_Refusals(t *testing.T) {
 		t.Fatal(err)
 	}
 	key, certPEM, _ := credentialFrom(t, v)
-	fragmented := append(append(bmffBox("ftyp", []byte("isom\x00\x00\x02\x00isom")), bmffBox("moov", nil)...), bmffBox("moof", nil)...)
+	// Media fragments with no initialization segment: no 'moov', so the library
+	// cannot bind them here and says to use SignFragmented. It must NOT carry a
+	// 'moov', which would make it the flat single-file fragmented arrangement
+	// that c2pa v0.19.0 signs.
+	fragmented := bytes.Join([][]byte{
+		bmffBox("ftyp", []byte("isom\x00\x00\x02\x00isom")),
+		bmffBox("moof", nil),
+		bmffBox("mdat", []byte("media")),
+	}, nil)
 	cases := []struct {
 		name string
 		data []byte
