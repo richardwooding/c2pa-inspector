@@ -94,6 +94,12 @@ being honest: the signatures and every hash binding (data hash for the JPEG, BMF
 the MP4) verify, but the chains do not reach a real C2PA trust anchor —
 `signingCredential.untrusted`, exactly as it should be.
 
+## Sponsor
+
+If this saves you time, you can [sponsor its maintenance](https://github.com/sponsors/richardwooding).
+Sponsorship pays for the unglamorous half — triage, dependency bumps, release plumbing — and is
+never a condition of getting help here.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
