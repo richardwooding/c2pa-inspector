@@ -29,6 +29,29 @@ var (
 type signOptions struct {
 	key                                               js.Value
 	certPEM, title, action, digitalSourceType, tsaURL string
+	// identityRoles, when non-empty, makes the signer ALSO write a
+	// cawg.identity assertion: a second signature saying who vouches for the
+	// content. It reuses the page's own credential, which the library allows
+	// ("they may be the claim's own") — so vouching costs no second key.
+	identityRoles []string
+}
+
+// strSlice reads a JS array of strings, skipping anything that is not one. A
+// missing or non-array field is simply no entries, which keeps the options
+// object additive: an older page passing no roles still signs.
+func strSlice(v js.Value) []string {
+	if v.Type() != js.TypeObject || v.Get("length").Type() != js.TypeNumber {
+		return nil
+	}
+	var out []string
+	for i := range v.Get("length").Int() {
+		if e := v.Index(i); e.Type() == js.TypeString {
+			if s := strings.TrimSpace(e.String()); s != "" {
+				out = append(out, s)
+			}
+		}
+	}
+	return out
 }
 
 func parseSignOptions(v js.Value) (signOptions, error) {
@@ -43,7 +66,8 @@ func parseSignOptions(v js.Value) (signOptions, error) {
 		return f.String()
 	}
 	o := signOptions{key: v.Get("key"), certPEM: str("certPEM"), title: str("title"), action: str("action"),
-		digitalSourceType: str("digitalSourceType"), tsaURL: strings.TrimSpace(str("tsaURL"))}
+		digitalSourceType: str("digitalSourceType"), tsaURL: strings.TrimSpace(str("tsaURL")),
+		identityRoles: strSlice(v.Get("identityRoles"))}
 	if o.key.Type() != js.TypeObject {
 		return signOptions{}, errors.New("no signing identity: create or import one first")
 	}
@@ -68,6 +92,12 @@ func signAsset(data []byte, o signOptions) ([]byte, report.Result, error) {
 		return nil, report.Result{}, err
 	}
 	opts := []c2pa.SignerOption{c2pa.WithClaimGenerator(claimGenerator, inspectorVersion())}
+	if len(o.identityRoles) > 0 {
+		// The same key and chain sign the identity: the actor vouching is the
+		// holder of this credential. A distinct second credential would need a
+		// second key in the page, which is its own piece of work.
+		opts = append(opts, c2pa.WithIdentitySigner(key, chain))
+	}
 	deadline := report.Deadline
 	if o.tsaURL != "" {
 		// The request goes out through fetch, so the TSA must allow CORS.
@@ -83,8 +113,10 @@ func signAsset(data []byte, o signOptions) ([]byte, report.Result, error) {
 	// ExtractStore reads as far as Sign does; Read's triage cap would miss a
 	// store at the end of a large file and make "auto" choose created.
 	store, _ := c2pa.ExtractStore(ctx, container, bytes.NewReader(data))
-	m, err := credential.BuildManifest(credential.SignRequest{Title: o.title, Action: o.action, DigitalSourceType: o.digitalSourceType},
-		len(store) > 0, c2pa.GeneratorInfo{Name: claimGenerator, Version: inspectorVersion()})
+	m, err := credential.BuildManifest(credential.SignRequest{
+		Title: o.title, Action: o.action, DigitalSourceType: o.digitalSourceType,
+		IdentityRoles: o.identityRoles,
+	}, len(store) > 0, c2pa.GeneratorInfo{Name: claimGenerator, Version: inspectorVersion()})
 	if err != nil {
 		return nil, report.Result{}, err
 	}

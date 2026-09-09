@@ -3,17 +3,19 @@
 // Command wasm exposes the pure-Go c2pa reader, validator and signer to the
 // browser as global functions:
 //
-//	c2paInspect(bytes Uint8Array) -> JSON string
+//	c2paInspect(bytes Uint8Array, opts?) -> JSON string
 //	c2paManifest(bytes Uint8Array) -> JSON string
 //	c2paLibVersion() -> string
 //	c2paCredentialCreate(name) -> Promise<{key: CryptoKey, certPEM, summary}>
 //	c2paCredentialImport(keyPEM, chainPEM) -> Promise<{key, certPEM, summary}>
-//	c2paSign(bytes, {key, certPEM, title, action, digitalSourceType, tsaURL})
-//	    -> Promise<{bytes: Uint8Array, report: JSON string}>
+//	c2paSign(bytes, {key, certPEM, title, action, digitalSourceType, tsaURL,
+//	    identityRoles}) -> Promise<{bytes: Uint8Array, report: JSON string}>
 //
 // The inspection result carries the unverified claims (what Read surfaces),
-// the full validation outcome with per-step C2PA status codes, and a summary
-// of the signer certificate chain. Signing keys live in WebCrypto,
+// the full validation outcome with per-step C2PA status codes, a summary of
+// the signer certificate chain, and any CAWG identities — who VOUCHED for the
+// content, which is a different question from which tool made it and conveys
+// neither attribution nor ownership. Signing keys live in WebCrypto,
 // non-extractable; Go only ever sees the public key and the signatures. All
 // work happens in-page; no bytes leave the browser unless a timestamp
 // authority is asked for.
@@ -22,11 +24,13 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"runtime/debug"
+	"strings"
 	"syscall/js"
 
 	"github.com/richardwooding/c2pa"
@@ -34,15 +38,62 @@ import (
 	"github.com/richardwooding/c2pa-inspector/internal/report"
 )
 
+// inspectOptions are the verification knobs the page may set. Both concern who
+// vouches for a named actor, and both are empty by default: CAWG publishes no
+// trust list, so the honest default is that an identity is genuine and its
+// actor unproven.
+type inspectOptions struct {
+	// identityTrustPEM anchors CAWG X.509 identity credentials. Read from a
+	// file the visitor chose, in the page, never fetched — nothing leaves the
+	// browser here.
+	identityTrustPEM string
+	// identityIssuers are aggregator DIDs to believe.
+	identityIssuers []string
+}
+
+// parseInspectOptions reads the optional second argument of c2paInspect. An
+// absent or malformed object means no options, so the old one-argument call
+// still works.
+func parseInspectOptions(v js.Value) inspectOptions {
+	if v.Type() != js.TypeObject {
+		return inspectOptions{}
+	}
+	var o inspectOptions
+	if f := v.Get("identityTrustPEM"); f.Type() == js.TypeString {
+		o.identityTrustPEM = f.String()
+	}
+	o.identityIssuers = strSlice(v.Get("identityIssuers"))
+	return o
+}
+
+// validateOptions turns the page's choices into library options.
+func (o inspectOptions) validateOptions() []c2pa.ValidateOption {
+	var opts []c2pa.ValidateOption
+	if pem := strings.TrimSpace(o.identityTrustPEM); pem != "" {
+		pool := x509.NewCertPool()
+		// A bundle with nothing usable in it anchors nothing, which is what an
+		// empty pool already means; there is no verdict to report here.
+		if pool.AppendCertsFromPEM([]byte(pem)) {
+			opts = append(opts, c2pa.WithIdentityTrust(pool))
+		}
+	}
+	// Only when the visitor named one. WithIdentityIssuers() with no DIDs means
+	// "trust NO aggregator" and would fail every aggregation credential.
+	if len(o.identityIssuers) > 0 {
+		opts = append(opts, c2pa.WithIdentityIssuers(o.identityIssuers...))
+	}
+	return opts
+}
+
 // inspect runs the validator over data and shapes the result for the page.
-func inspect(data []byte) report.Result {
+func inspect(data []byte, o inspectOptions) report.Result {
 	container, name, ok := report.Sniff(data)
 	if !ok {
 		return report.Result{Error: report.UnsupportedMessage}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), report.Deadline)
 	defer cancel()
-	r := c2pa.Validate(ctx, container, bytes.NewReader(data))
+	r := c2pa.Validate(ctx, container, bytes.NewReader(data), o.validateOptions()...)
 	if ctx.Err() != nil {
 		return report.Result{Container: name,
 			Error: "validation took too long and was stopped — the file may be malformed"}
@@ -156,7 +207,11 @@ func registerGlobals() {
 		data := make([]byte, src.Get("length").Int())
 		js.CopyBytesToGo(data, src)
 
-		res := inspect(data)
+		var opts inspectOptions
+		if len(args) > 1 {
+			opts = parseInspectOptions(args[1])
+		}
+		res := inspect(data, opts)
 		b, err := json.Marshal(res)
 		if err != nil {
 			eb, _ := json.Marshal(report.Result{Error: "internal: " + err.Error()})

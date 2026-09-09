@@ -248,6 +248,8 @@
       chain.appendChild(none);
     }
 
+    renderIdentities(q("[data-identity-card]"), q("[data-identities]"), res.identities);
+
     renderTerm(q("[data-statuses]"), termLines(name, res));
 
     if (manifest && manifest.boxes && manifest.boxes.length) {
@@ -343,6 +345,72 @@
     if (res.error) lines = [["fail", "✗ " + res.error]];
     if (!lines.length) lines = [["info", "· no validation statuses recorded"]];
     return [["pr-line", "c2pa validate " + name]].concat(lines);
+  }
+
+  // renderIdentities fills the "Vouched for by" card, or leaves it hidden when
+  // the manifest names nobody. Old share links carry no identities field.
+  function renderIdentities(card, list, identities) {
+    if (!identities || !identities.length) { return; }
+    card.hidden = false;
+    identities.forEach(function (id) {
+      var li = document.createElement("li");
+      var who = document.createElement("div"); who.className = "cn";
+      who.textContent = identityName(id);
+      var meta = document.createElement("div"); meta.className = "meta";
+      meta.textContent = identitySentence(id);
+      li.appendChild(who); li.appendChild(meta);
+      (id.verifiedIdentities || []).forEach(function (vi) {
+        var sig = document.createElement("div"); sig.className = "meta";
+        sig.textContent = signalSentence(vi);
+        li.appendChild(sig);
+      });
+      list.appendChild(li);
+    });
+  }
+
+  // identityName is who the actor is said to be. A proven name is the actor's
+  // own; anything else is somebody's claim and is labelled as one.
+  function identityName(id) {
+    if (id.trusted && id.name) { return id.name; }
+    if (id.presentedAs) { return id.presentedAs; }
+    var claimed = (id.verifiedIdentities || []).find(function (vi) { return vi.name || vi.username; });
+    if (claimed) { return claimed.name || claimed.username; }
+    return "an unnamed actor";
+  }
+
+  // identitySentence is the one place an identity's standing is worded, the way
+  // bindingSentence is for the binding. It must never read as authorship: a
+  // CAWG identity conveys neither attribution nor ownership, only that the
+  // actor signed over these assertions.
+  function identitySentence(id) {
+    if (!id.valid) {
+      return "This identity assertion did not validate" +
+        (id.sigType === "cawg.identity_claims_aggregation" && id.issuer ? " — its issuer is " + shortDID(id.issuer) : "") + ".";
+    }
+    var vouched = "the content";
+    if (id.referenced && id.referenced.length) { vouched = "the content and " + id.referenced.join(", "); }
+    var roles = id.roles && id.roles.length ? " as " + id.roles.join(", ") : "";
+    var standing = id.trusted
+      ? "Proven: their credential reaches a trust anchor you configured."
+      : (id.sigType === "cawg.identity_claims_aggregation"
+        ? "Signature genuine. The name is " + shortDID(id.issuer) + "'s word, and you have not said whether to believe that aggregator."
+        : "Signature genuine, actor not proven: their credential is not on a trust list you configured.");
+    return "Vouched for " + vouched + roles + ". " + standing;
+  }
+
+  // signalSentence renders one thing an aggregator says it checked.
+  function signalSentence(vi) {
+    var kind = (vi.type || "signal").replace(/^cawg\./, "").replace(/_/g, " ");
+    var who = vi.name || vi.username || "an account";
+    var when = vi.verifiedAt ? " on " + vi.verifiedAt.slice(0, 10) : "";
+    return "· " + kind + ": " + who + (vi.providerName ? " via " + vi.providerName : "") + when + " — the aggregator's word";
+  }
+
+  // shortDID keeps a did:jwk from swallowing the sentence it appears in; it
+  // embeds a whole public key.
+  function shortDID(did) {
+    if (!did) { return "the issuer"; }
+    return did.length > 28 ? did.slice(0, 28) + "…" : did;
   }
 
   function addClaim(dl, key, val) {

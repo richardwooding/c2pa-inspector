@@ -17,6 +17,7 @@
   var credRemember = $("cred-remember"), credForget = $("cred-forget"), credStatus = $("cred-status");
   var signFile = $("sign-file"), signTitle = $("sign-title"), signAction = $("sign-action");
   var signDst = $("sign-dst"), signDstCustom = $("sign-dst-custom"), signTSA = $("sign-tsa");
+  var signRole = $("sign-role");
   var signGo = $("sign-go"), signStatus = $("sign-status"), signResult = $("sign-result");
   var tpl = $("signed-template");
   if (!credNone || !signGo || !tpl) return;
@@ -203,7 +204,9 @@
     var file = chosen;
     var title = signTitle.value.trim() || file.name;
     var dst = signDst.value === "custom" ? signDstCustom.value.trim() : signDst.value;
-    var opts = { key: cred.key, certPEM: cred.certPEM, title: title, action: signAction.value,
+    var role = signRole ? signRole.value : "";
+  var opts = { key: cred.key, certPEM: cred.certPEM, title: title, action: signAction.value,
+    identityRoles: role ? [role] : [],
       digitalSourceType: dst, tsaURL: signTSA.value.trim() };
     busy(signGo, true);
     setStatus(signStatus, "Signing " + file.name + "…" + (opts.tsaURL ? " (contacting the timestamp authority)" : ""), "working");
@@ -283,6 +286,13 @@
     addRow(dl, "signed by", report.signedBy);
     addRow(dl, "signature and hash", bound ? "verified — the file is bound to this manifest" : "NOT verified: " + (report.firstFailure || "see the inspection"));
     addRow(dl, "signer trusted", trusted ? "yes" : "no — " + (cred.kind === "test" ? "self-signed test identity" : "issuer not on the trust list"));
+    // What the identity assertion says, in the verifier's own terms rather than
+    // ours: it went in, and whether anyone believes it is their decision.
+    if (opts.identityRoles && opts.identityRoles.length) {
+      var wrote = (report.identities || []).length > 0;
+      addRow(dl, "vouched as", opts.identityRoles.join(", ") +
+        (wrote ? " — recorded; a verifier reports it unproven unless they trust your issuer" : " — NOT recorded, see the inspection"));
+    }
     addRow(dl, "title", report.title);
     addRow(dl, "action", opts.action === "auto" ? (report.statuses && hasIngredient(report) ? "opened (chained to the existing credentials)" : "created") : opts.action);
     addRow(dl, "generator", report.claimGenerator);

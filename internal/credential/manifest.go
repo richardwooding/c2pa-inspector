@@ -57,6 +57,15 @@ type SignRequest struct {
 	Action            string // "auto", "created" or "opened"
 	DigitalSourceType string
 	TSAURL            string
+	// IdentityRoles are the roles a named actor declares in producing the
+	// asset — "cawg.creator", "cawg.editor", … Setting any makes the signer
+	// write a cawg.identity assertion, which needs an identity credential; the
+	// library refuses the combination otherwise, so BuildManifest only fills
+	// Manifest.Identity when the caller asked for it.
+	IdentityRoles []string
+	// IdentityReferences names further assertions of this manifest the actor
+	// signs over. The content itself always is, and must not be listed.
+	IdentityReferences []string
 }
 
 // BuildManifest turns a request into the library's Manifest. present says
@@ -85,12 +94,18 @@ func BuildManifest(req SignRequest, present bool, agent c2pa.GeneratorInfo) (c2p
 	if err != nil {
 		return c2pa.Manifest{}, err
 	}
-	return c2pa.Manifest{
+	m := c2pa.Manifest{
 		Title: strings.TrimSpace(req.Title),
 		Actions: []c2pa.Action{{
 			Action:            action,
 			DigitalSourceType: dst,
 			SoftwareAgent:     agent,
 		}},
-	}, nil
+	}
+	// Only when asked: Manifest.Identity set without an identity signer is
+	// ErrManifestInvalid, so an empty IdentityInfo must stay empty.
+	if len(req.IdentityRoles) > 0 || len(req.IdentityReferences) > 0 {
+		m.Identity = c2pa.IdentityInfo{Roles: req.IdentityRoles, References: req.IdentityReferences}
+	}
+	return m, nil
 }
