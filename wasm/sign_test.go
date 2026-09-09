@@ -464,3 +464,131 @@ func TestGlobalsShape(t *testing.T) {
 		t.Fatalf("junk import: %v", reason.Get("code"))
 	}
 }
+
+// TestSignAsNamedActor is the novel half of this page: a CAWG identity signed
+// entirely in the browser, with a key that never leaves WebCrypto. The library
+// puts the identity key through the same crypto.MessageSigner path as the claim
+// key, so the page's existing non-extractable credential serves as is.
+func TestSignAsNamedActor(t *testing.T) {
+	v, err := credentialCreate("Vouching identity")
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, certPEM, _ := credentialFrom(t, v)
+	data := unsignedJPEG(t)
+
+	out, rep, err := signAsset(data, signOptions{
+		key: key, certPEM: certPEM, title: "vouched", action: "auto",
+		digitalSourceType: "digitalCapture", identityRoles: []string{"cawg.creator"},
+	})
+	if err != nil {
+		t.Fatalf("signAsset: %v", err)
+	}
+	if len(rep.Identities) != 1 {
+		t.Fatalf("wrote %d identities, want 1", len(rep.Identities))
+	}
+	id := rep.Identities[0]
+
+	// The page's honest verdict about its own output: genuine signature, actor
+	// not proven, because this page anchors no identity trust list.
+	switch {
+	case !id.Valid:
+		t.Errorf("the identity we just wrote should be valid: %+v", id)
+	case id.Trusted:
+		t.Error("nothing anchored the actor; trusted must be false")
+	case id.Name != "":
+		t.Errorf("name is the PROVEN name and must be empty here, got %q", id.Name)
+	case id.PresentedAs == "":
+		t.Error("the presented subject should be there to show")
+	case id.SigType != "cawg.x509.cose":
+		t.Errorf("sig type = %q", id.SigType)
+	}
+	if len(id.Roles) != 1 || id.Roles[0] != "cawg.creator" {
+		t.Errorf("roles = %v", id.Roles)
+	}
+
+	// Anchoring the actor's own certificate proves them — the flip a verifier
+	// makes when they decide to believe an issuer.
+	chain, err := credential.ParseChainPEM([]byte(certPEM))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool := x509.NewCertPool()
+	pool.AddCert(chain[len(chain)-1])
+	container, name, _ := report.Sniff(out)
+	anchored := report.FromValidation(name, c2pa.Validate(context.Background(), container, bytes.NewReader(out),
+		c2pa.WithIdentityTrust(pool), c2pa.WithOnlineRevocation(false)))
+	if len(anchored.Identities) != 1 || !anchored.Identities[0].Trusted || anchored.Identities[0].Name == "" {
+		t.Fatalf("anchored identity = %+v", anchored.Identities)
+	}
+}
+
+// TestSignWithoutRoleWritesNoIdentity: vouching is opt-in, and the library
+// refuses Manifest.Identity without an identity signer — so the default path
+// must not set one.
+func TestSignWithoutRoleWritesNoIdentity(t *testing.T) {
+	v, err := credentialCreate("Quiet identity")
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, certPEM, _ := credentialFrom(t, v)
+	_, rep := signWith(t, key, certPEM, unsignedJPEG(t), "auto", "no vouching")
+	if len(rep.Identities) != 0 {
+		t.Errorf("wrote %d identities without being asked", len(rep.Identities))
+	}
+}
+
+// TestInspectOptionsIssuersGuard pins the trap: c2pa.WithIdentityIssuers() with
+// no DIDs means "trust NO aggregator" and fails every aggregation credential,
+// so the option must not be built when the page named none.
+func TestInspectOptionsIssuersGuard(t *testing.T) {
+	if got := (inspectOptions{}).validateOptions(); len(got) != 0 {
+		t.Errorf("no options asked for, %d built", len(got))
+	}
+	if got := (inspectOptions{identityIssuers: []string{}}).validateOptions(); len(got) != 0 {
+		t.Errorf("an empty issuer list must not build the option, %d built", len(got))
+	}
+	if got := (inspectOptions{identityIssuers: []string{"did:jwk:abc"}}).validateOptions(); len(got) != 1 {
+		t.Errorf("a named issuer should build one option, got %d", len(got))
+	}
+	// A PEM with nothing usable in it anchors nothing, and must not pretend to.
+	if got := (inspectOptions{identityTrustPEM: "not a pem"}).validateOptions(); len(got) != 0 {
+		t.Errorf("unusable PEM built %d options", len(got))
+	}
+}
+
+// TestParseSignOptionsRoles: the roles field is a JS array, the one new parsing
+// shape, and anything else must be no roles rather than an error — an older
+// page that passes none still signs.
+func TestParseSignOptionsRoles(t *testing.T) {
+	base := map[string]any{"key": js.Global().Get("Object").New(), "certPEM": "x"}
+	cases := map[string]struct {
+		roles any
+		want  int
+	}{
+		"absent":        {nil, 0},
+		"empty array":   {[]any{}, 0},
+		"one role":      {[]any{"cawg.creator"}, 1},
+		"blank skipped": {[]any{"  ", "cawg.editor"}, 1},
+		"not an array":  {"cawg.creator", 0},
+		"non-strings":   {[]any{1, true}, 0},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			obj := js.Global().Get("Object").New()
+			for k, v := range base {
+				obj.Set(k, v)
+			}
+			if tc.roles != nil {
+				obj.Set("identityRoles", js.ValueOf(tc.roles))
+			}
+			o, err := parseSignOptions(obj)
+			if err != nil {
+				t.Fatalf("parseSignOptions: %v", err)
+			}
+			if len(o.identityRoles) != tc.want {
+				t.Errorf("roles = %v, want %d", o.identityRoles, tc.want)
+			}
+		})
+	}
+}

@@ -269,6 +269,13 @@
           <ol class="chain" data-chain></ol>
         </div>
       </div>
+      <div class="gl-card" style="margin-top:20px" data-identity-card hidden>
+        <h3>Vouched for by <span class="gl-hint">(who signed as a named actor)</span></h3>
+        <p class="gl-hint" style="margin:4px 0 12px">A C2PA claim says which <em>tool</em> wrote the
+          manifest. A CAWG identity assertion says which <em>person or organisation</em> signed over
+          the content with their own credential. It does not say who created the file.</p>
+        <ol class="chain" data-identities></ol>
+      </div>
       <div class="gl-card" style="margin-top:20px">
         <h3>Validation log</h3>
         <p class="gl-hint" style="margin:4px 0 12px">Every C2PA §15 status the validator recorded, in order.</p>
@@ -402,6 +409,20 @@
               <option value="custom">custom URL…</option>
             </select></label>
           <input type="url" id="sign-dst-custom" placeholder="http://cv.iptc.org/newscodes/digitalsourcetype/…" hidden aria-label="Custom digital source type URL">
+          <label>Vouch as a named actor
+            <select id="sign-role">
+              <option value="">no — sign the content only</option>
+              <option value="cawg.creator">yes, as creator</option>
+              <option value="cawg.editor">yes, as editor</option>
+              <option value="cawg.producer">yes, as producer</option>
+              <option value="cawg.publisher">yes, as publisher</option>
+              <option value="cawg.contributor">yes, as contributor</option>
+              <option value="cawg.translator">yes, as translator</option>
+            </select></label>
+          <p class="gl-hint">Adds a second signature — a CAWG identity assertion — made with the same
+            credential, saying that its holder vouches for this content in that role. It does not
+            claim they created the file. A verifier reports it as genuine but unproven unless they
+            have put your certificate authority on a trust list of their own.</p>
           <details>
             <summary>Advanced</summary>
             <label>Timestamp authority URL (RFC 3161)
@@ -465,6 +486,20 @@
             C2PA trust list. A file signed with a test or self-issued certificate passes the
             first and fails the second, which is the correct and honest outcome rather than
             a bug.</p>
+        </details>
+        <details>
+          <summary>Someone &ldquo;vouched for&rdquo; a file — does that mean they made it?</summary>
+          <p>No, and the standard is explicit about it: a CAWG identity assertion
+            &ldquo;should not be construed to convey either attribution or ownership&rdquo;.
+            What it does say is narrower and more useful — a named actor signed over this
+            manifest's content with their own credential, in whatever role they declared.
+            Where the credential comes from an <em>identity aggregator</em>, the names and
+            accounts you see are that aggregator's word: it attests that the actor showed it
+            those signals and showed it this asset, nothing more.</p>
+          <p>This page reports an actor as <em>unproven</em> unless you have given it a trust
+            list of your own. That is the normal outcome, not a warning: nobody publishes a
+            list of authorities that vouch for people, so a genuine signature by a real
+            person still reads as unproven here.</p>
         </details>
         <details>
           <summary>What does a failed hash binding mean?</summary>
@@ -594,6 +629,11 @@ r := c2pa.<span class="k">Validate</span>(ctx, c2pa.JPEG, file)
           "@type": "Question",
           "name": "Why does it say the signature is valid but the signer is untrusted?",
           "acceptedAnswer": { "@type": "Answer", "text": "Those are two separate questions. The signature check asks whether the bytes were signed by whoever holds the key. The trust check asks whether that key belongs to anyone recognised, by chaining the signer's certificate to the official C2PA trust list. A file signed with a test or self-issued certificate passes the first and fails the second." }
+        },
+        {
+          "@type": "Question",
+          "name": "Someone vouched for a file — does that mean they made it?",
+          "acceptedAnswer": { "@type": "Answer", "text": "No. The CAWG standard says an identity assertion should not be construed to convey either attribution or ownership. It says a named actor signed over the manifest's content with their own credential, in whatever role they declared. Where the credential comes from an identity aggregator, the names and accounts shown are that aggregator's word: it attests that the actor showed it those signals and showed it this asset, nothing more. This page reports an actor as unproven unless you supply a trust list of your own, which is the normal outcome rather than a warning." }
         },
         {
           "@type": "Question",

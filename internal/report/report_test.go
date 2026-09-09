@@ -3,9 +3,12 @@ package report
 import (
 	"bytes"
 	"context"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/json"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/richardwooding/c2pa"
 )
@@ -97,5 +100,61 @@ func TestFromValidation_NoManifest(t *testing.T) {
 	// Nothing bound it, which is not the same claim as "the file changed".
 	if res.Binding != "none" {
 		t.Fatalf("Binding = %q, want none", res.Binding)
+	}
+}
+
+// TestSummarizeIdentities is the JSON contract for the "Vouched for by" card,
+// and the place the presented/proven split is pinned. The library only fills
+// Name once an actor is proven, so a summary that leaked a name here would be
+// claiming something no anchor supports.
+func TestSummarizeIdentities(t *testing.T) {
+	verified := time.Date(2026, 5, 3, 12, 0, 0, 0, time.UTC)
+	got := SummarizeIdentities([]c2pa.Identity{
+		{
+			Label: "cawg.identity", SigType: "cawg.x509.cose", URI: "urn:x/cawg.identity",
+			Roles: []string{"cawg.creator"}, Referenced: []string{"c2pa.hash.data"}, Valid: true,
+			Chain: []*x509.Certificate{{Subject: pkix.Name{CommonName: "Alice Example"}}},
+		},
+		{
+			Label: "cawg.identity__1", SigType: "cawg.identity_claims_aggregation",
+			Issuer: "did:jwk:eyJrdHkiOiJPS1AifQ", Valid: true,
+			VerifiedIdentities: []c2pa.VerifiedIdentity{{
+				Type: "cawg.social_media", Name: "Alice", Username: "alice",
+				VerifiedAt: verified, Provider: c2pa.IdentityProvider{Name: "Social Example"},
+			}},
+		},
+	})
+	if len(got) != 2 {
+		t.Fatalf("%d identities", len(got))
+	}
+
+	x509Identity, aggregation := got[0], got[1]
+	switch {
+	case x509Identity.PresentedAs == "":
+		t.Error("an X.509 identity has a certificate subject to present")
+	case x509Identity.Name != "":
+		t.Errorf("Name is the PROVEN name and nothing anchored this one: %q", x509Identity.Name)
+	case x509Identity.Trusted:
+		t.Error("trusted without an anchor")
+	}
+	switch {
+	case aggregation.PresentedAs != "":
+		t.Errorf("an aggregation credential carries no certificate: %q", aggregation.PresentedAs)
+	case aggregation.Issuer == "":
+		t.Error("the aggregator's DID should be reported")
+	case len(aggregation.VerifiedIdentities) != 1:
+		t.Fatalf("%d signals", len(aggregation.VerifiedIdentities))
+	}
+	if vi := aggregation.VerifiedIdentities[0]; vi.Name != "Alice" || vi.ProviderName != "Social Example" ||
+		vi.VerifiedAt != verified.Format(time.RFC3339) {
+		t.Errorf("signal = %+v", vi)
+	}
+
+	// The JSON contract with app.js: these keys must exist under these names.
+	raw, _ := json.Marshal(got)
+	for _, key := range []string{`"label"`, `"sigType"`, `"valid"`, `"trusted"`, `"presentedAs"`, `"issuer"`, `"verifiedIdentities"`, `"providerName"`} {
+		if !bytes.Contains(raw, []byte(key)) {
+			t.Errorf("JSON lacks %s", key)
+		}
 	}
 }

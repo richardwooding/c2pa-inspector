@@ -43,6 +43,32 @@ file leaves the browser, as a download.
   cross-origin requests over https, which most public ones do not; a failure writes nothing.
 - Signing an asset that already carries credentials keeps them: the existing manifest becomes the
   new one's `parentOf` ingredient (the `auto` action picks `opened`; `created` is refused).
+- **Vouch as a named actor** — optional. Picking a role writes a **CAWG identity assertion**: a
+  second signature, made with the same credential, saying that its holder vouches for this content
+  as creator, editor, producer and so on. As far as I know this is the only place on the web you can
+  make one, because it needs a key that signs whole messages — the same `crypto.MessageSigner` path
+  the claim signature already takes, so the non-extractable browser key serves unchanged.
+
+## Who vouched for it
+
+A C2PA claim says which *tool* wrote a manifest. A CAWG identity assertion says which *person or
+organisation* signed over the content with their own credential. When a file carries one, the page
+shows a **Vouched for by** card.
+
+It will not tell you who made the file, and that is deliberate: the standard says an identity
+assertion "should not be construed to convey either attribution or ownership". So the card says what
+the actor vouched for and in which role, and nothing else.
+
+**Unproven is the normal result.** Nobody publishes a list of certificate authorities that vouch for
+people, so a genuine signature by a real person reads as *signature genuine, actor not proven* here.
+That is the same honesty the page applies to the claim signer, not a warning about the file.
+
+The second kind of credential is an **identity claims aggregation**: an aggregator's verifiable
+credential listing signals it checked — a social account, a document verification, an affiliation.
+Those names and handles are the aggregator's word. It attests that the actor showed it those signals
+and showed it this asset; the page labels them as such and never as proof. Only `did:jwk` issuers
+are resolved; a `did:web` issuer reports `cawg.ica.did_unsupported_method`, which is a limit of this
+build rather than a defect in the file.
 
 Under the hood this needs one thing of the library: a key that can only sign whole messages —
 WebCrypto's `SubtleCrypto.sign` — implements Go's standard `crypto.MessageSigner`, which

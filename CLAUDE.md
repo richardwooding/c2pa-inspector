@@ -57,6 +57,46 @@ names the c2pa engine version.
   IndexedDB, sign form, the Signed card), `index.html` (page-specific CSS lives in its inline
   `<style>`). **`gloam.css`/`gloam.js` are vendored by `sync-gloam.sh` — never edit them.**
 
+## CAWG identity — who vouched for the asset
+
+The page shows `report.Result.Identities` in a "Vouched for by" card, and `sign` can write one.
+Everything delicate here is about what the words are allowed to mean:
+
+- **The governing rule is the spec's.** CAWG says an identity assertion "SHOULD NOT be construed to
+  convey either attribution or ownership of a C2PA asset", and an aggregation credential attests
+  only that the actor PRESENTED signals and PRESENTED this asset. Nothing may render as "created
+  by". `identitySentence` in `app.js` is the ONE place an identity's standing is worded — the same
+  rule `bindingSentence` follows — and the FAQ entry explaining it exists in BOTH copies, the
+  `<details>` and the JSON-LD twin.
+- **`name` is proven, `presentedAs` is claimed.** The library returns `Identity.Name()` empty unless
+  `Trusted`, exactly as `VerifiedSigner` works. Since the page anchors no identity trust list by
+  default, every identity in the wild renders unproven — as a fact, never as a warning.
+- **Derive the verdict from `valid`/`trusted`, never from status codes.** Identity statuses live at
+  `<manifest>/<assertion label>` and REUSE core codes: `claimSignature.validated` and
+  `signingCredential.trusted` appear there for the identity's own signature and chain. `Result.Has`
+  ignores URI and must stay about the claim. The library also emits no `signingCredential.untrusted`
+  for an identity, so "unproven" is `valid && !trusted`, not the absence of a code.
+- **Signing reuses the page's own credential.** The library allows the identity key to be the claim
+  key, and `webCryptoKey` already implements `crypto.MessageSigner`, so vouching costs no second
+  key: `signAsset` appends `WithIdentitySigner(key, chain)` when `identityRoles` is non-empty. A
+  genuinely SEPARATE second credential needs the multi-credential panel refactor that #20's CSR flow
+  also needs — whichever lands first should do it.
+- **`BuildManifest` fills `Manifest.Identity` only when asked.** Setting it without an identity
+  signer is `ErrManifestInvalid`, so an empty `IdentityInfo` must stay empty.
+- **`WithIdentityIssuers()` with no DIDs means "trust NO aggregator"** and would fail every
+  aggregation credential — Go hands a variadic function a nil slice for zero arguments. The guard is
+  in `inspectOptions.validateOptions`, at the call site, and `TestInspectOptionsIssuersGuard` pins
+  it along with the unusable-PEM case.
+- `c2paInspect` takes an OPTIONAL second argument now (`{identityTrustPEM, identityIssuers}`), so
+  the old one-argument call still works; a trust PEM is read from a file the visitor chose, in the
+  page, never fetched — nothing leaves the browser for it.
+- `presentedAs` is empty for an aggregation credential (no certificate) and for an X.509 identity
+  whose COSE carried no x5chain — guard `chain[0]`.
+- `Identities` is the ACTIVE manifest's only; an ingredient's identities are validated and produce
+  statuses at their own URIs with no card.
+- **Size**: the CAWG verifier was already linked in, so this cost **+18 KiB raw / +4 KiB gzipped**
+  (14.97 → 14.99 MiB; 3.81 MiB gzipped either way). Only the signing path was new.
+
 ## Things to know before editing
 
 - **On import, `Public()` is borrowed from the leaf certificate** — a non-extractable private key

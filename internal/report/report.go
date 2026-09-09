@@ -32,6 +32,51 @@ type CertSummary struct {
 	Algorithm string `json:"algorithm"`
 }
 
+// Identity is one CAWG identity assertion as the page shows it: a named actor
+// who signed over this manifest's content with their own credential.
+//
+// Name is who was PROVEN and is empty unless Trusted, exactly as
+// Result.VerifiedSigner is. PresentedAs, Issuer and VerifiedIdentities are what
+// the file SAYS, populated whether or not anything vouched for them.
+//
+// None of it conveys attribution or ownership: the assertion means this actor
+// vouched for these assertions, and an aggregation credential means an
+// aggregator says the actor showed it these signals and this asset.
+type Identity struct {
+	Label   string `json:"label"`
+	SigType string `json:"sigType,omitempty"`
+	// URI is where this identity's statuses live, "<manifest>/<label>". They are
+	// not the claim's, even where the codes are the same ones.
+	URI string `json:"uri,omitempty"`
+	// Roles and Referenced are the actor's declared roles and the assertions
+	// they signed over, in payload order. The hard binding is always among the
+	// latter, which is what makes the actor vouch for the content itself.
+	Roles      []string `json:"roles,omitempty"`
+	Referenced []string `json:"referenced,omitempty"`
+	Valid      bool     `json:"valid"`
+	Trusted    bool     `json:"trusted"`
+	Name       string   `json:"name,omitempty"`
+	// PresentedAs is the identity certificate's subject, a claim until Trusted.
+	// Empty for an aggregation credential, which carries no certificate.
+	PresentedAs string `json:"presentedAs,omitempty"`
+	// Issuer is the aggregator's DID, as presented.
+	Issuer string `json:"issuer,omitempty"`
+	// VerifiedIdentities are the signals an aggregator says it checked — its
+	// word, proven only as far as that aggregator is trusted.
+	VerifiedIdentities []VerifiedIdentity `json:"verifiedIdentities,omitempty"`
+	SignedAt           string             `json:"signedAt,omitempty"`
+}
+
+// VerifiedIdentity is one signal an aggregator vouched for, as presented by it.
+type VerifiedIdentity struct {
+	Type         string `json:"type,omitempty"`
+	Name         string `json:"name,omitempty"`
+	Username     string `json:"username,omitempty"`
+	URI          string `json:"uri,omitempty"`
+	VerifiedAt   string `json:"verifiedAt,omitempty"`
+	ProviderName string `json:"providerName,omitempty"`
+}
+
 // Status is one C2PA §15 status entry.
 type Status struct {
 	Code        string `json:"code"`
@@ -66,7 +111,11 @@ type Result struct {
 	FirstFailure        string        `json:"firstFailure,omitempty"`
 	Statuses            []Status      `json:"statuses"`
 	SignerChain         []CertSummary `json:"signerChain"`
-	Error               string        `json:"error,omitempty"`
+	// Identities are the active manifest's CAWG identity assertions — who
+	// vouched for the content, as against which tool made it. Identities of
+	// ingredient manifests are validated but not listed.
+	Identities []Identity `json:"identities,omitempty"`
+	Error      string     `json:"error,omitempty"`
 }
 
 // SeverityString names a severity the way the page's CSS classes expect.
@@ -158,6 +207,49 @@ func SummarizeChain(chain []*x509.Certificate) []CertSummary {
 	return out
 }
 
+// SummarizeIdentities renders the named actors who vouched for the content.
+// Name comes from the library and is empty unless the actor was proven;
+// everything else is as presented.
+func SummarizeIdentities(ids []c2pa.Identity) []Identity {
+	out := make([]Identity, 0, len(ids))
+	for _, id := range ids {
+		e := Identity{
+			Label:      id.Label,
+			SigType:    id.SigType,
+			URI:        id.URI,
+			Roles:      id.Roles,
+			Referenced: id.Referenced,
+			Valid:      id.Valid,
+			Trusted:    id.Trusted,
+			Name:       id.Name(),
+			Issuer:     id.Issuer,
+		}
+		// No certificate on an aggregation credential, nor on an X.509 identity
+		// whose COSE carried no x5chain.
+		if len(id.Chain) > 0 && id.Chain[0] != nil {
+			e.PresentedAs = id.Chain[0].Subject.String()
+		}
+		if !id.SignedAt.IsZero() {
+			e.SignedAt = id.SignedAt.UTC().Format(time.RFC3339)
+		}
+		for _, vi := range id.VerifiedIdentities {
+			v := VerifiedIdentity{
+				Type:         vi.Type,
+				Name:         vi.Name,
+				Username:     vi.Username,
+				URI:          vi.URI,
+				ProviderName: vi.Provider.Name,
+			}
+			if !vi.VerifiedAt.IsZero() {
+				v.VerifiedAt = vi.VerifiedAt.UTC().Format(time.RFC3339)
+			}
+			e.VerifiedIdentities = append(e.VerifiedIdentities, v)
+		}
+		out = append(out, e)
+	}
+	return out
+}
+
 // FromValidation shapes a validator result for the page. container is the
 // label Sniff produced.
 func FromValidation(container string, r c2pa.ValidationResult) Result {
@@ -180,6 +272,7 @@ func FromValidation(container string, r c2pa.ValidationResult) Result {
 		ActiveManifestLabel: r.ActiveManifestLabel,
 		Statuses:            make([]Status, 0, len(r.Statuses)),
 		SignerChain:         SummarizeChain(r.SignerChain),
+		Identities:          SummarizeIdentities(r.Identities),
 	}
 	if !r.Info.SignedAt.IsZero() {
 		out.ClaimedSignedAt = r.Info.SignedAt.UTC().Format(time.RFC3339)
